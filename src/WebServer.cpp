@@ -52,7 +52,7 @@ AsyncWebServer::AsyncWebServer(uint16_t port)
 }
 
 AsyncWebServer::~AsyncWebServer(){
-  reset();  
+  reset();
   end();
   if(_catchAllHandler) delete _catchAllHandler;
 }
@@ -118,8 +118,8 @@ void AsyncWebServer::_attachHandler(AsyncWebServerRequest *request){
       return;
     }
   }
-  
-  request->addInterestingHeader("ANY");
+
+  request->addInterestingHeader(F("ANY"));
   request->setHandler(_catchAllHandler);
 }
 
@@ -183,7 +183,7 @@ void AsyncWebServer::onRequestBody(ArBodyHandlerFunction fn){
 void AsyncWebServer::reset(){
   _rewrites.free();
   _handlers.free();
-  
+
   if (_catchAllHandler != NULL){
     _catchAllHandler->onRequest(NULL);
     _catchAllHandler->onUpload(NULL);
