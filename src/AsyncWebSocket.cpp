@@ -1139,14 +1139,14 @@ void AsyncWebSocket::binaryAll(const __FlashStringHelper *message, size_t len){
   }
  }
 
-const char * __WS_STR_CONNECTION[] PROGMEM = { "Connection" };
-const char * __WS_STR_UPGRADE[] PROGMEM = { "Upgrade" };
-const char * __WS_STR_ORIGIN[] PROGMEM = { "Origin" };
-const char * __WS_STR_VERSION[] PROGMEM = { "Sec-WebSocket-Version" };
-const char * __WS_STR_KEY[] PROGMEM = { "Sec-WebSocket-Key" };
-const char * __WS_STR_PROTOCOL[] PROGMEM = { "Sec-WebSocket-Protocol" };
-const char * __WS_STR_ACCEPT[] PROGMEM = { "Sec-WebSocket-Accept" };
-const char * __WS_STR_UUID[] PROGMEM = { "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" };
+const char __WS_STR_CONNECTION[] PROGMEM = { "Connection" };
+const char __WS_STR_UPGRADE[] PROGMEM = { "Upgrade" };
+const char __WS_STR_ORIGIN[] PROGMEM = { "Origin" };
+const char __WS_STR_VERSION[] PROGMEM = { "Sec-WebSocket-Version" };
+const char __WS_STR_KEY[] PROGMEM = { "Sec-WebSocket-Key" };
+const char __WS_STR_PROTOCOL[] PROGMEM = { "Sec-WebSocket-Protocol" };
+const char __WS_STR_ACCEPT[] PROGMEM = { "Sec-WebSocket-Accept" };
+const char __WS_STR_UUID[] PROGMEM = { "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" };
 
 #define WS_STR_CONNECTION FPSTR(__WS_STR_CONNECTION)
 #define WS_STR_UPGRADE FPSTR(__WS_STR_UPGRADE)
@@ -1156,7 +1156,6 @@ const char * __WS_STR_UUID[] PROGMEM = { "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" 
 #define WS_STR_PROTOCOL FPSTR(__WS_STR_PROTOCOL)
 #define WS_STR_ACCEPT FPSTR(__WS_STR_ACCEPT)
 #define WS_STR_UUID FPSTR(__WS_STR_UUID)
-
 
 bool AsyncWebSocket::canHandle(AsyncWebServerRequest *request){
   if(!_enabled)
