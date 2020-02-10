@@ -26,8 +26,6 @@
 #define os_strlen strlen
 #endif
 
-static const String SharedEmptyString = String();
-
 #define __is_param_char(c) ((c) && ((c) != '{') && ((c) != '[') && ((c) != '&') && ((c) != '='))
 
 enum { PARSE_REQ_START, PARSE_REQ_HEADERS, PARSE_REQ_BODY, PARSE_REQ_END, PARSE_REQ_FAIL };
@@ -312,7 +310,7 @@ bool AsyncWebServerRequest::_parseReqHeader(){
     } else if(name.equalsIgnoreCase("Content-Type")){
       if (value.startsWith("multipart/")){
         _boundary = value.substring(value.indexOf('=')+1);
-        _boundary.replace("\"","");
+        _boundary.replace(String('"'), String());
         _contentType = value.substring(0, value.indexOf(';'));
         _isMultipart = true;
       } else {
@@ -352,7 +350,7 @@ void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data){
   if(!data || (char)data == '&' || _parsedLength == _contentLength){
     String name = "body";
     String value = _temp;
-    if(!_temp.startsWith("{") && !_temp.startsWith("[") && _temp.indexOf('=') > 0){
+    if(!_temp.startsWith(String('{')) && !_temp.startsWith(String('[')) && _temp.indexOf('=') > 0){
       name = _temp.substring(0, _temp.indexOf('='));
       value = _temp.substring(_temp.indexOf('=') + 1);
     }
@@ -565,8 +563,8 @@ void AsyncWebServerRequest::_parseLine(){
       _server->_attachHandler(this);
       _removeNotInterestingHeaders();
       if(_expectingContinue){
-        const char * response = "HTTP/1.1 100 Continue\r\n\r\n";
-        _client->write(response, os_strlen(response));
+        String response = F("HTTP/1.1 100 Continue\r\n\r\n");
+        _client->write(response.c_str(), response.length());
       }
       //check handler for authentication
       if(_contentLength){
@@ -594,23 +592,7 @@ bool AsyncWebServerRequest::hasHeader(const String& name) const {
 }
 
 bool AsyncWebServerRequest::hasHeader(const __FlashStringHelper * data) const {
-  PGM_P p = reinterpret_cast<PGM_P>(data);
-  size_t n = 0;
-  while (1) {
-    if (pgm_read_byte(p+n) == 0) break;
-      n += 1;
-  }
-  char * name = (char*) malloc(n+1);
-  name[n] = 0; 
-  if (name) {
-    for(size_t b=0; b<n; b++)
-      name[b] = pgm_read_byte(p++);    
-    bool result = hasHeader( String(name) ); 
-    free(name); 
-    return result; 
-  } else {
-    return false; 
-  }
+  return hasHeader(String(data));
 }
 
 AsyncWebHeader* AsyncWebServerRequest::getHeader(const String& name) const {
@@ -623,17 +605,7 @@ AsyncWebHeader* AsyncWebServerRequest::getHeader(const String& name) const {
 }
 
 AsyncWebHeader* AsyncWebServerRequest::getHeader(const __FlashStringHelper * data) const {
-  PGM_P p = reinterpret_cast<PGM_P>(data);
-  size_t n = strlen_P(p); 
-  char * name = (char*) malloc(n+1);
-  if (name) {
-    strcpy_P(name, p); 
-    AsyncWebHeader* result = getHeader( String(name)); 
-    free(name); 
-    return result; 
-  } else {
-    return nullptr; 
-  }
+  return getHeader(String(data));
 }
 
 AsyncWebHeader* AsyncWebServerRequest::getHeader(size_t num) const {
@@ -655,19 +627,7 @@ bool AsyncWebServerRequest::hasParam(const String& name, bool post, bool file) c
 }
 
 bool AsyncWebServerRequest::hasParam(const __FlashStringHelper * data, bool post, bool file) const {
-  PGM_P p = reinterpret_cast<PGM_P>(data);
-  size_t n = strlen_P(p);
-
-  char * name = (char*) malloc(n+1);
-  name[n] = 0; 
-  if (name) {
-    strcpy_P(name,p);    
-    bool result = hasParam( name, post, file); 
-    free(name); 
-    return result; 
-  } else {
-    return false; 
-  }
+  return hasParam(String(data).c_str(), post, file);
 }
 
 AsyncWebParameter* AsyncWebServerRequest::getParam(const String& name, bool post, bool file) const {
@@ -680,17 +640,7 @@ AsyncWebParameter* AsyncWebServerRequest::getParam(const String& name, bool post
 }
 
 AsyncWebParameter* AsyncWebServerRequest::getParam(const __FlashStringHelper * data, bool post, bool file) const {
-  PGM_P p = reinterpret_cast<PGM_P>(data);
-  size_t n = strlen_P(p);
-  char * name = (char*) malloc(n+1);
-  if (name) {
-    strcpy_P(name, p);   
-    AsyncWebParameter* result = getParam(name, post, file); 
-    free(name); 
-    return result; 
-  } else {
-    return nullptr; 
-  }
+  return getParam(String(data).c_str(), post, file);
 }
 
 AsyncWebParameter* AsyncWebServerRequest::getParam(size_t num) const {
@@ -823,12 +773,12 @@ bool AsyncWebServerRequest::authenticate(const char * hash){
 
   if(_isDigest){
     String hStr = String(hash);
-    int separator = hStr.indexOf(":");
+    int separator = hStr.indexOf(':');
     if(separator <= 0)
       return false;
     String username = hStr.substring(0, separator);
     hStr = hStr.substring(separator + 1);
-    separator = hStr.indexOf(":");
+    separator = hStr.indexOf(':');
     if(separator <= 0)
       return false;
     String realm = hStr.substring(0, separator);
@@ -846,7 +796,7 @@ void AsyncWebServerRequest::requestAuthentication(const char * realm, bool isDig
   } else if(!isDigest){
     String header = "Basic realm=\"";
     header.concat(realm);
-    header.concat("\"");
+    header += '"';
     r->addHeader("WWW-Authenticate", header);
   } else {
     String header = "Digest ";
@@ -866,17 +816,7 @@ bool AsyncWebServerRequest::hasArg(const char* name) const {
 }
 
 bool AsyncWebServerRequest::hasArg(const __FlashStringHelper * data) const {
-  PGM_P p = reinterpret_cast<PGM_P>(data);
-  size_t n = strlen_P(p); 
-  char * name = (char*) malloc(n+1);
-  if (name) {
-    strcpy_P(name, p);    
-    bool result = hasArg( name ); 
-    free(name); 
-    return result; 
-  } else {
-    return false; 
-  }
+  return hasArg(String(data).c_str());
 }
 
 
@@ -886,22 +826,11 @@ const String& AsyncWebServerRequest::arg(const String& name) const {
       return arg->value();
     }
   }
-  return SharedEmptyString;
+  return emptyString;
 }
 
 const String& AsyncWebServerRequest::arg(const __FlashStringHelper * data) const {
-  PGM_P p = reinterpret_cast<PGM_P>(data);
-  size_t n = strlen_P(p);
-  char * name = (char*) malloc(n+1);
-  if (name) {
-    strcpy_P(name, p);
-    const String & result = arg( String(name) ); 
-    free(name); 
-    return result; 
-  } else {
-    return SharedEmptyString;
-  }
-
+  return arg(String(data).c_str());
 }
 
 const String& AsyncWebServerRequest::arg(size_t i) const {
@@ -914,32 +843,22 @@ const String& AsyncWebServerRequest::argName(size_t i) const {
 
 const String& AsyncWebServerRequest::header(const char* name) const {
   AsyncWebHeader* h = getHeader(String(name));
-  return h ? h->value() : SharedEmptyString;
+  return h ? h->value() : emptyString;
 }
 
 const String& AsyncWebServerRequest::header(const __FlashStringHelper * data) const {
-  PGM_P p = reinterpret_cast<PGM_P>(data);
-  size_t n = strlen_P(p); 
-  char * name = (char*) malloc(n+1);
-  if (name) {
-    strcpy_P(name, p);  
-    const String & result = header( (const char *)name ); 
-    free(name); 
-    return result; 
-  } else {
-    return SharedEmptyString; 
-  }
-};  
+  return header(String(data).c_str());
+};
 
 
 const String& AsyncWebServerRequest::header(size_t i) const {
   AsyncWebHeader* h = getHeader(i);
-  return h ?  h->value() : SharedEmptyString;
+  return h ?  h->value() : emptyString;
 }
 
 const String& AsyncWebServerRequest::headerName(size_t i) const {
   AsyncWebHeader* h = getHeader(i);
-  return h ? h->name() : SharedEmptyString;
+  return h ? h->name() : emptyString;
 }
 
 String AsyncWebServerRequest::urlDecode(const String& text) const {
