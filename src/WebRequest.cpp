@@ -851,7 +851,7 @@ const String& AsyncWebServerRequest::argName(size_t i) const {
 
 const String& AsyncWebServerRequest::pathArg(size_t i) const {
   auto param = _pathParams.nth(i);
-  return param ? **param : SharedEmptyString;
+  return param ? **param : emptyString;
 }
 
 const String& AsyncWebServerRequest::header(const char* name) const {

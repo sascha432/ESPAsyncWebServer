@@ -369,6 +369,8 @@ class AsyncWebServerResponse {
     size_t _writtenLength;
     WebResponseState _state;
     const char* _responseCodeToString(int code);
+public:
+    static const __FlashStringHelper *responseCodeToString(int code);
 
   public:
     AsyncWebServerResponse();
