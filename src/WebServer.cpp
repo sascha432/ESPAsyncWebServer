@@ -29,6 +29,11 @@ bool ON_AP_FILTER(AsyncWebServerRequest *request) {
   return WiFi.localIP() != request->client()->localIP();
 }
 
+#ifndef HAVE_FS_FILE_OPEN_MODE
+const char *fs::FileOpenMode::read = "r";
+const char *fs::FileOpenMode::write = "w";
+const char *fs::FileOpenMode::append = "a";
+#endif
 
 AsyncWebServer::AsyncWebServer(uint16_t port)
   : _server(port)

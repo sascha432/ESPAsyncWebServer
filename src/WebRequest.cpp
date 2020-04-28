@@ -273,7 +273,7 @@ bool AsyncWebServerRequest::_parseReqHead(){
     _method = HTTP_OPTIONS;
   }
 
-  String g = String();
+  String g;
   index = u.indexOf('?');
   if(index > 0){
     g = u.substring(index +1);

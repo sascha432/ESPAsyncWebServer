@@ -70,6 +70,17 @@ typedef enum {
 } WebRequestMethod;
 #endif
 
+#ifndef HAVE_FS_FILE_OPEN_MODE
+namespace fs {
+    class FileOpenMode {
+    public:
+        static const char *read;
+        static const char *write;
+        static const char *append;
+    };
+};
+#endif
+
 //if this value is returned when asked for data, packet will not be sent and you will be asked for data again
 #define RESPONSE_TRY_AGAIN 0xFFFFFFFF
 

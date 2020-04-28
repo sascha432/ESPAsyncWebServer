@@ -525,7 +525,7 @@ AsyncFileResponse::AsyncFileResponse(FS &fs, const String& path, const String& c
     _chunked = false;
   }
 
-  _content = fs.open(_path, "r");
+  _content = fs.open(_path, fs::FileOpenMode::read);
   _contentLength = _content.size();
 
   if(contentType.length() == 0)
