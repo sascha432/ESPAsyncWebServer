@@ -79,6 +79,8 @@ namespace fs {
         static const char *append;
     };
 };
+#else
+#include "FileOpenMode.h"
 #endif
 
 //if this value is returned when asked for data, packet will not be sent and you will be asked for data again
