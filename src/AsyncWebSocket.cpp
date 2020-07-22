@@ -42,6 +42,9 @@ void SHA1Final(unsigned char digest[20], SHA1_CTX* context);
 
 #define MAX_PRINTF_LEN 64
 
+size_t AsyncWebSocketMessageBufferLinkedList::_totalCount = 0;
+size_t AsyncWebSocketMessageBufferLinkedList::_totalSize = 0;
+
 size_t webSocketSendFrameWindow(AsyncClient *client){
   if(!client->canSend())
     return 0;
@@ -263,7 +266,7 @@ class AsyncWebSocketControl {
         _data = (uint8_t*)malloc(_len);
         if(_data == NULL)
           _len = 0;
-        else memcpy(_data, data, len);
+        else memcpy_P(_data, data, len);
       } else _data = NULL;
     }
     virtual ~AsyncWebSocketControl(){
@@ -471,7 +474,7 @@ AsyncWebSocketMultiMessage::~AsyncWebSocketMultiMessage() {
 /*
  * Async WebSocket Client
  */
- const char * AWSC_PING_PAYLOAD = "ESPAsyncWebServer-PING";
+ const char *AWSC_PING_PAYLOAD[] PROGMEM = { "ESPAsyncWebServer-PING" };
  const size_t AWSC_PING_PAYLOAD_LEN = 22;
 
 AsyncWebSocketClient::AsyncWebSocketClient(AsyncWebServerRequest *request, AsyncWebSocket *server)
@@ -547,8 +550,18 @@ void AsyncWebSocketClient::_runQueue(){
 }
 
 bool AsyncWebSocketClient::queueIsFull(){
-  if((_messageQueue.length() >= WS_MAX_QUEUED_MESSAGES) || (_status != WS_CONNECTED) ) return true;
+  if(_queueIsFull() || (_status != WS_CONNECTED) ) return true;
   return false;
+}
+
+bool AsyncWebSocketClient::_queueIsFull() const {
+  return
+    (_server->getQueuedMessageCount() >= WS_MAX_QUEUED_MESSAGES) ||
+    (_server->getQueuedMessageSize() >= WS_MAX_QUEUED_MESSAGES_SIZE)
+#if WS_MAX_QUEUED_MESSAGES_MIN_HEAP
+    || (ESP.getFreeHeap() < WS_MAX_QUEUED_MESSAGES_MIN_HEAP)
+#endif
+    ;
 }
 
 void AsyncWebSocketClient::_queueMessage(AsyncWebSocketMessage *dataMessage){
@@ -558,8 +571,11 @@ void AsyncWebSocketClient::_queueMessage(AsyncWebSocketMessage *dataMessage){
     delete dataMessage;
     return;
   }
-  if(_messageQueue.length() >= WS_MAX_QUEUED_MESSAGES){
-      ets_printf(String(F("ERROR: Too many messages queued\n")).c_str());
+  ::printf("QUEUE heap=%u len=%u can_send=%u\n", ESP.getFreeHeap(), _messageQueue.length(), _client->canSend());
+  if(_queueIsFull()){
+#if DEBUG
+      ::printf(PSTR("AsyncWebSocketClient: Too many messages queued\n"));
+#endif
       delete dataMessage;
   } else {
       _messageQueue.add(dataMessage);
@@ -689,7 +705,7 @@ void AsyncWebSocketClient::_onData(void *pbuf, size_t plen){
       } else if(_pinfo.opcode == WS_PING){
         _queueControl(new AsyncWebSocketControl(WS_PONG, data, datalen));
       } else if(_pinfo.opcode == WS_PONG){
-        if(datalen != AWSC_PING_PAYLOAD_LEN || memcmp(AWSC_PING_PAYLOAD, data, AWSC_PING_PAYLOAD_LEN) != 0)
+        if(datalen != AWSC_PING_PAYLOAD_LEN || memcmp_P(data, AWSC_PING_PAYLOAD, AWSC_PING_PAYLOAD_LEN) != 0)
           _server->_handleEvent(this, WS_EVT_PONG, NULL, data, datalen);
       } else if(_pinfo.opcode < 8){//continuation or text/binary frame
         _server->_handleEvent(this, WS_EVT_DATA, (void *)&_pinfo, data, datalen);
@@ -849,7 +865,6 @@ AsyncWebSocket::AsyncWebSocket(const String& url)
   ,_clients(LinkedList<AsyncWebSocketClient *>([](AsyncWebSocketClient *c){ delete c; }))
   ,_cNextId(1)
   ,_enabled(true)
-  ,_buffers(LinkedList<AsyncWebSocketMessageBuffer *>([](AsyncWebSocketMessageBuffer *b){ delete b; }))
 {
   _eventHandler = NULL;
 }
