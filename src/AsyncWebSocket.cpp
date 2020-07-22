@@ -571,7 +571,6 @@ void AsyncWebSocketClient::_queueMessage(AsyncWebSocketMessage *dataMessage){
     delete dataMessage;
     return;
   }
-  ::printf("QUEUE heap=%u len=%u can_send=%u\n", ESP.getFreeHeap(), _messageQueue.length(), _client->canSend());
   if(_queueIsFull()){
 #if DEBUG
       ::printf(PSTR("AsyncWebSocketClient: Too many messages queued\n"));

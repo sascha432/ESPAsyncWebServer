@@ -381,6 +381,11 @@ class AsyncWebSocket: public AsyncWebHandler {
     AsyncWebSocketClientLinkedList getClients() const;
 
 public:
+#ifndef DEBUG_AWS_QUEUE_COUNTERS
+#define DEBUG_AWS_QUEUE_COUNTERS 0
+#endif
+
+#if DEBUG_AWS_QUEUE_COUNTERS
     // total for all sockets
   size_t getQueuedMessageCount() const {
     _verifyCounters();
@@ -397,17 +402,33 @@ public:
   static size_t _getQueuedMessageSize() {
     return AsyncWebSocketMessageBufferLinkedList::_totalSize;
   }
-
 private:
   void _verifyCounters() const {
-#if 1
     size_t t=0,c=0;
     for(const auto b: _buffers) {
       t+=b->length();
+      c++;
     }
-    ::printf(PSTR("size %u=%u cnt %u=%u\n"), AsyncWebSocketMessageBufferLinkedList::_totalSize, t,AsyncWebSocketMessageBufferLinkedList::_totalCount, c);
-#endif
+    if (AsyncWebSocketMessageBufferLinkedList::_totalSize!=t || AsyncWebSocketMessageBufferLinkedList::_totalCount!=c) {
+      ::printf(PSTR("AsyncWebSocketMessageBufferLinkedList size %u=%u cnt %u=%u\n"), AsyncWebSocketMessageBufferLinkedList::_totalSize, t,AsyncWebSocketMessageBufferLinkedList::_totalCount, c);
+      panic();
+    }
   }
+#else
+  size_t getQueuedMessageCount() const {
+    return _getQueuedMessageCount();
+  }
+  size_t getQueuedMessageSize() const {
+    return _getQueuedMessageSize();
+  }
+
+  static size_t _getQueuedMessageCount() {
+    return AsyncWebSocketMessageBufferLinkedList::_totalCount;
+  }
+  static size_t _getQueuedMessageSize() {
+    return AsyncWebSocketMessageBufferLinkedList::_totalSize;
+  }
+#endif
 
 };
 
