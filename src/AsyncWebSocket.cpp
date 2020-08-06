@@ -23,7 +23,7 @@
 
 #include <libb64/cencode.h>
 
-#if HAVE_KFC_FIRMWARE_VERSION
+#ifdef HAVE_KFC_FIRMWARE_VERSION
 #include <debug_helper.h>
 #else
 #define __DBG_printf(...)
@@ -318,7 +318,7 @@ AsyncWebSocketBasicMessage::AsyncWebSocketBasicMessage(const char * data, size_t
     _status = WS_MSG_ERROR;
   } else {
     _status = WS_MSG_SENDING;
-    memcpy(_data, data, _len);
+    memcpy_P(_data, data, _len);
     _data[_len] = 0;
   }
 }
@@ -491,8 +491,8 @@ AsyncWebSocketMultiMessage::~AsyncWebSocketMultiMessage() {
 /*
  * Async WebSocket Client
  */
- const char *AWSC_PING_PAYLOAD[] PROGMEM = { "ESPAsyncWebServer-PING" };
- const size_t AWSC_PING_PAYLOAD_LEN = 22;
+ const char AWSC_PING_PAYLOAD[] PROGMEM = { "ESPAsyncWebServer-PING" };
+ constexpr size_t AWSC_PING_PAYLOAD_LEN = 22;
 
 AsyncWebSocketClient::AsyncWebSocketClient(AsyncWebServerRequest *request, AsyncWebSocket *server)
   : _controlQueue(LinkedList<AsyncWebSocketControl *>([](AsyncWebSocketControl *c){ delete  c; }))
@@ -822,7 +822,7 @@ void AsyncWebSocketClient::text(const char * message){
 }
 
 void AsyncWebSocketClient::text(uint8_t * message, size_t len){
-  text((const char *)message, len);
+  text(reinterpret_cast<const char *>(message), len);
 }
 
 void AsyncWebSocketClient::text(char * message){
@@ -834,11 +834,9 @@ void AsyncWebSocketClient::text(const String &message){
 }
 
 void AsyncWebSocketClient::text(const __FlashStringHelper *data){
-#if HAVE_KFC_FIRMWARE_VERSION
-  __DBG_panic("do not use");
-#endif
-  text(String(data));
+  text(reinterpret_cast<const char *>(data), strlen_P(reinterpret_cast<const char *>(data)));
 }
+
 void AsyncWebSocketClient::text(AsyncWebSocketMessageBuffer * buffer)
 {
   _queueMessage(new AsyncWebSocketMultiMessage(buffer));
@@ -865,18 +863,9 @@ void AsyncWebSocketClient::binary(const String &message){
 }
 
 void AsyncWebSocketClient::binary(const __FlashStringHelper *data, size_t len){
-#if HAVE_KFC_FIRMWARE_VERSION
-  __DBG_panic("do not use");
-#endif
-  PGM_P p = reinterpret_cast<PGM_P>(data);
-  char * message = (char*) malloc(len);
-  if(message){
-    memcpy_P(message, p, len);
-    binary(message, len);
-    free(message);
-  }
-
+  binary(reinterpret_cast<const char *>(data), len);
 }
+
 void AsyncWebSocketClient::binary(AsyncWebSocketMessageBuffer * buffer)
 {
   _queueMessage(new AsyncWebSocketMultiMessage(buffer, WS_BINARY));
@@ -1230,7 +1219,7 @@ void AsyncWebSocket::binaryAll(const String &message){
 void AsyncWebSocket::binaryAll(const __FlashStringHelper *message, size_t len){
   for(const auto& c: _clients){
     if(c->status() == WS_CONNECTED)
-      c-> binary(message, len);
+      c->binary(message, len);
   }
  }
 
