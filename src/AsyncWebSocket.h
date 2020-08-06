@@ -22,29 +22,31 @@
 #define ASYNCWEBSOCKET_H_
 
 #include <Arduino.h>
-#ifdef ESP32
-#include <AsyncTCP.h>
-#ifndef WS_MAX_QUEUED_MESSAGES
-#define WS_MAX_QUEUED_MESSAGES 32
-#endif
-#ifndef WS_MAX_QUEUED_MESSAGES_SIZE
-#define WS_MAX_QUEUED_MESSAGES_SIZE 65535
-#endif
-#else
-#include <ESPAsyncTCP.h>
-#ifndef WS_MAX_QUEUED_MESSAGES
-#define WS_MAX_QUEUED_MESSAGES 8
-#endif
-#ifndef WS_MAX_QUEUED_MESSAGES_SIZE
-#define WS_MAX_QUEUED_MESSAGES_SIZE 8192
-#endif
-#endif
-#include <ESPAsyncWebServer.h>
 
-// 0 = disable
+// total number of messages in the queue for all socket servers
+#ifndef WS_MAX_QUEUED_MESSAGES
+#define WS_MAX_QUEUED_MESSAGES 64
+#endif
+// if free heap drops below this number, the queue reports fuill. 0 = disable
 #ifndef WS_MAX_QUEUED_MESSAGES_MIN_HEAP
 #define WS_MAX_QUEUED_MESSAGES_MIN_HEAP 0
 #endif
+
+// max. size of the messages in the queue of all socket servers
+#ifndef WS_MAX_QUEUED_MESSAGES_SIZE
+#if defined(ESP8266)
+#define WS_MAX_QUEUED_MESSAGES_SIZE 8192
+#else
+#define WS_MAX_QUEUED_MESSAGES_SIZE 65535
+#endif
+#endif
+
+#ifdef ESP32
+#include <AsyncTCP.h>
+#else
+#include <ESPAsyncTCP.h>
+#endif
+#include <ESPAsyncWebServer.h>
 
 #include "AsyncWebSynchronization.h"
 

@@ -266,12 +266,12 @@ class AsyncWebSocketControl {
     AsyncWebSocketControl(uint8_t opcode, size_t len, bool mask = false) :
       _opcode(opcode),
       _data(nullptr),
-      _len(len),
-      _mask(len && mask),
+      _len(std::min(len, 125U)),
+      _mask(_len && mask),
       _finished(false)
     {
       if(_len) {
-        _data = (uint8_t*)malloc(std::min(_len, 125U));
+        _data = (uint8_t*)malloc(_len);
         if (!_data) {
           _len = 0;
         }
@@ -281,7 +281,7 @@ class AsyncWebSocketControl {
     AsyncWebSocketControl(uint8_t opcode, uint8_t *data = nullptr, size_t len = 0, bool mask = false) : AsyncWebSocketControl(opcode, data ? len : 0, mask)
     {
       if (data && _len) {
-        memcpy_P(_data, data, len);
+        memcpy_P(_data, data, _len);
       }
     }
 
