@@ -311,8 +311,14 @@ class AsyncWebSocket: public AsyncWebHandler {
     AsyncWebSocketClient * client(uint32_t id);
     bool hasClient(uint32_t id){ return client(id) != NULL; }
 
-    void close(uint32_t id, uint16_t code=0, const char * message=NULL);
-    void closeAll(uint16_t code=0, const char * message=NULL);
+    void close(uint32_t id, uint16_t code = 0, const char *message = nullptr);
+    void close(uint32_t id, uint16_t code = 0, const __FlashStringHelper *message = nullptr) {
+      close(id, code, reinterpret_cast<const char *>(message));
+    }
+    void closeAll(uint16_t code = 0, const char *message = nullptr);
+    void closeAll(uint16_t code = 0, const __FlashStringHelper *message = nullptr) {
+      closeAll(code, reinterpret_cast<const char *>(message));
+    }
     void cleanupClients(uint16_t maxClients = DEFAULT_MAX_WS_CLIENTS);
 
     void ping(uint32_t id, uint8_t *data=NULL, size_t len=0);

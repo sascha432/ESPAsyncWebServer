@@ -491,8 +491,8 @@ AsyncWebSocketMultiMessage::~AsyncWebSocketMultiMessage() {
 /*
  * Async WebSocket Client
  */
- const char AWSC_PING_PAYLOAD[] PROGMEM = { "ESPAsyncWebServer-PING" };
- constexpr size_t AWSC_PING_PAYLOAD_LEN = 22;
+const char AWSC_PING_PAYLOAD[] PROGMEM = { "ESPAsyncWebServer-PING" };
+constexpr size_t AWSC_PING_PAYLOAD_LEN = 22;
 
 AsyncWebSocketClient::AsyncWebSocketClient(AsyncWebServerRequest *request, AsyncWebSocket *server)
   : _controlQueue(LinkedList<AsyncWebSocketControl *>([](AsyncWebSocketControl *c){ delete  c; }))
@@ -606,12 +606,12 @@ void AsyncWebSocketClient::_queueControl(AsyncWebSocketControl *controlMessage){
     _runQueue();
 }
 
-void AsyncWebSocketClient::close(uint16_t code, const char * message){
+void AsyncWebSocketClient::close(uint16_t code, const char *message){
   if(_status != WS_CONNECTED) {
     return;
   }
   if (code) {
-    auto socketCtrl = new AsyncWebSocketControl(WS_DISCONNECT, 2 + (message ? strlen(message) : 0));
+    auto socketCtrl = new AsyncWebSocketControl(WS_DISCONNECT, 2 + (message ? strlen_P(message) : 0));
     if (socketCtrl) {
       auto buf = socketCtrl->_data;
       if (buf) {
