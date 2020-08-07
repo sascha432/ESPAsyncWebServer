@@ -142,7 +142,7 @@ String requestDigestAuthentication(const char * realm){
 }
 
 bool checkDigestAuthentication(const char * header, const __FlashStringHelper *method, const char * username, const char * password, const char * realm, bool passwordIsHash, const char * nonce, const char * opaque, const char * uri){
-  if(username == NULL || password == NULL || header == NULL || method == NULL){
+  if(!username || !password || !header || !method){
     //os_printf("AUTH FAIL: missing requred fields\n");
     return false;
   }
@@ -163,11 +163,11 @@ bool checkDigestAuthentication(const char * header, const __FlashStringHelper *m
   String myNc = String();
   String myCnonce = String();
 
-  myHeader += F(", ");
+  myHeader += ',';
   do {
     String avLine = myHeader.substring(0, nextBreak);
     avLine.trim();
-    myHeader = myHeader.substring(nextBreak+1);
+    myHeader = myHeader.substring(nextBreak + 1);
     nextBreak = myHeader.indexOf(',');
 
     int eqSign = avLine.indexOf('=');
@@ -176,16 +176,18 @@ bool checkDigestAuthentication(const char * header, const __FlashStringHelper *m
       return false;
     }
     String varName = avLine.substring(0, eqSign);
-    avLine = avLine.substring(eqSign + 1);
-    if(avLine.startsWith(String('"'))){
-      avLine = avLine.substring(1, avLine.length() - 1);
+    if (avLine.charAt(++eqSign) == '"') {
+      eqSign++;
+    }
+    avLine = avLine.substring(eqSign);
+    auto len = avLine.length();
+    if (len != 0 && avLine.charAt(len - 1) == '"') {
+      avLine.remove(len - 1, 1);
     }
 
+    // __DBG_printf("var='%s' avLine='%s'", __S(varName), __S(avLine));
+
     if(varName.equals(F("username"))){
-      if(!avLine.equals(username)){
-        //os_printf("AUTH FAIL: username\n");
-        return false;
-      }
       myUsername = avLine;
     } else if(varName.equals(F("realm"))){
       if(realm != NULL && !avLine.equals(realm)){
@@ -221,7 +223,25 @@ bool checkDigestAuthentication(const char * header, const __FlashStringHelper *m
     }
   } while(nextBreak > 0);
 
-  String ha1 = (passwordIsHash) ? String(password) : stringMD5(myUsername + ':' + myRealm + ':' + String(password));
+  String myPassword;
+#ifdef HAVE_KFC_FIRMWARE_VERSION
+  if (username[0] == 0xff && !username[1] && password[0] == 0xff) { // username=='\xff' and password[0]==0xff is indicator for a session id
+    extern bool generate_session_for_username(const String &username, String &password);
+    if (!generate_session_for_username(myUsername, myPassword)) {
+      return false;
+    }
+  }
+  else
+#endif
+  {
+    myPassword = password;
+    if(!myUsername.equals(username)){
+      //os_printf("AUTH FAIL: username\n");
+      return false;
+    }
+  }
+
+  String ha1 = (passwordIsHash) ? myPassword : stringMD5(myUsername + ':' + myRealm + ':' + myPassword);
   String ha2 = String(method) + ':' + myUri;
   String response = ha1 + ':' + myNonce + ':' + myNc + ':' + myCnonce + ':' + myQop + ':' + stringMD5(ha2);
 
