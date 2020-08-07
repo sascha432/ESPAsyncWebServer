@@ -315,7 +315,7 @@ bool AsyncWebServerRequest::_parseReqHeader(){
   if(index){
     String name = _temp.substring(0, index);
     String value = _temp.substring(index + 2);
-    if(name.equalsIgnoreCase("Host")){
+    if(name.equalsIgnoreCase(F("Host"))){
       _host = value;
     } else if(name.equalsIgnoreCase(F("Content-Type"))){
 	    _contentType = value.substring(0, value.indexOf(';'));
@@ -356,11 +356,16 @@ void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data){
   if(data && (char)data != '&')
     _temp += (char)data;
   if(!data || (char)data == '&' || _parsedLength == _contentLength){
-    String name = F("body");
-    String value = _temp;
-    if(!_temp.startsWith(String('{')) && !_temp.startsWith(String('[')) && _temp.indexOf('=') > 0){
-      name = _temp.substring(0, _temp.indexOf('='));
-      value = _temp.substring(_temp.indexOf('=') + 1);
+    String name;
+    String value;
+    int pos;
+    if(_temp.charAt(0) != '{' && _temp.charAt(0) != '[' && ((pos = _temp.indexOf('=')) > 0)){
+      name = _temp.substring(0, pos);
+      value = _temp.substring(pos + 1);
+    }
+    else {
+      name = F("body");
+      value = _temp;
     }
     _addParam(new AsyncWebParameter(urlDecode(name), urlDecode(value), true));
     _temp = String();
