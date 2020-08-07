@@ -640,7 +640,6 @@ void AsyncWebSocketClient::_onError(int8_t error){
 }
 
 void AsyncWebSocketClient::_onTimeout(uint32_t time) {
-  (void)time;
   uint16_t reasonCode = 1006; // there is no reason for timeout, but the websocket will show reason 1006, unclean disconnect without reason since the socket is just closed
   String reason = F("Timeout ");
   reason += String(time / 1000.0, 2);
