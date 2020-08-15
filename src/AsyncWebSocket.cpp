@@ -576,7 +576,9 @@ bool AsyncWebSocketClient::_queueIsFull() const {
     (_server->getQueuedMessageCount() >= WS_MAX_QUEUED_MESSAGES) ||
     (_server->getQueuedMessageSize() >= WS_MAX_QUEUED_MESSAGES_SIZE)
 #if WS_MAX_QUEUED_MESSAGES_MIN_HEAP
-    || (ESP.getFreeHeap() < WS_MAX_QUEUED_MESSAGES_MIN_HEAP)
+    || (_server->getQueuedMessageCount() >= WS_MIN_QUEUED_MESSAGES &&
+        _server->getQueuedMessageSize() >= WS_MIN_QUEUED_MESSAGES_SIZE &&
+         ESP.getFreeHeap() < WS_MAX_QUEUED_MESSAGES_MIN_HEAP)
 #endif
     ;
 }
