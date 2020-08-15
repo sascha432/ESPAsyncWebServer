@@ -123,7 +123,7 @@ class AsyncWebSocketMessageBuffer {
   public:
     AsyncWebSocketMessageBuffer();
     AsyncWebSocketMessageBuffer(size_t size);
-    AsyncWebSocketMessageBuffer(uint8_t * data, size_t size);
+    AsyncWebSocketMessageBuffer(uint8_t *data, size_t size, bool allocate = true); // allocate=true copies the content of data to _data, false sets _data to data
     AsyncWebSocketMessageBuffer(const AsyncWebSocketMessageBuffer &);
     AsyncWebSocketMessageBuffer(AsyncWebSocketMessageBuffer &&);
     ~AsyncWebSocketMessageBuffer();
@@ -398,7 +398,7 @@ class AsyncWebSocket: public AsyncWebHandler {
 
     //  messagebuffer functions/objects.
     AsyncWebSocketMessageBuffer * makeBuffer(size_t size = 0);
-    AsyncWebSocketMessageBuffer * makeBuffer(uint8_t * data, size_t size);
+    AsyncWebSocketMessageBuffer * makeBuffer(uint8_t *data, size_t size, bool allocate = true);
     AsyncWebSocketMessageBufferLinkedList _buffers;
     void _cleanBuffers();
 

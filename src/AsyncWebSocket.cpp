@@ -146,7 +146,7 @@ AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer()
 
 }
 
-AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(uint8_t * data, size_t size)
+AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(uint8_t *data, size_t size, bool allocate)
   :_data(nullptr)
   ,_len(size)
   ,_lock(false)
@@ -157,11 +157,15 @@ AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(uint8_t * data, size_t 
     return;
   }
 
-  _data = new uint8_t[_len + 1];
-
-  if (_data) {
-    memcpy(_data, data, _len);
-    _data[_len] = 0;
+  if (allocate) {
+    _data = new uint8_t[_len + 1];
+    if (_data) {
+      memcpy(_data, data, _len);
+      _data[_len] = 0;
+    }
+  }
+  else {
+    _data = data;
   }
 }
 
@@ -1294,9 +1298,9 @@ AsyncWebSocketMessageBuffer * AsyncWebSocket::makeBuffer(size_t size)
   return buffer;
 }
 
-AsyncWebSocketMessageBuffer * AsyncWebSocket::makeBuffer(uint8_t * data, size_t size)
+AsyncWebSocketMessageBuffer * AsyncWebSocket::makeBuffer(uint8_t * data, size_t size, bool allocate)
 {
-  AsyncWebSocketMessageBuffer * buffer = new AsyncWebSocketMessageBuffer(data, size);
+  AsyncWebSocketMessageBuffer *buffer = new AsyncWebSocketMessageBuffer(data, size, allocate);
 
   if (buffer) {
     AsyncWebLockGuard l(_lock);
