@@ -594,6 +594,10 @@ void AsyncWebSocketClient::_queueMessage(AsyncWebSocketMessage *dataMessage){
     delete dataMessage;
     return;
   }
+#if defined(HAVE_KFC_FIRMWARE_VERSION) && AT_MODE_SUPPORTED && DEBUG
+  extern void __kfcfw_queue_monitor(AsyncWebSocketMessage *dataMessage, AsyncClient *_client, AsyncWebSocket *_server);
+  __kfcfw_queue_monitor(dataMessage, _client, _server);
+#endif
   if(_queueIsFull()){
       __DBG_printf("Too many messages queued");
       delete dataMessage;

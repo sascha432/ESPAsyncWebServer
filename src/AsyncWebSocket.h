@@ -25,7 +25,7 @@
 
 // total number of messages in the queue for all socket servers
 #ifndef WS_MAX_QUEUED_MESSAGES
-#  define WS_MAX_QUEUED_MESSAGES                  4
+#  define WS_MAX_QUEUED_MESSAGES                  12
 #endif
 
 // max. size of the messages in the queue of all socket servers
@@ -42,19 +42,17 @@
 #  define WS_MAX_QUEUED_MESSAGES_MIN_HEAP         0
 #endif
 
-#if WS_MAX_QUEUED_MESSAGES_MIN_HEAP
 // minimum number of messages before WS_MAX_QUEUED_MESSAGES_MIN_HEAP gets checked
-#  ifndef WS_MIN_QUEUED_MESSAGES
-#      define WS_MIN_QUEUED_MESSAGES              8
-#  endif
+#ifndef WS_MIN_QUEUED_MESSAGES
+#    define WS_MIN_QUEUED_MESSAGES                6
+#endif
 // min queue size before WS_MAX_QUEUED_MESSAGES_MIN_HEAP gets checked
-#  ifndef WS_MIN_QUEUED_MESSAGES_SIZE
-#      if defined(ESP8266)
-#        define WS_MIN_QUEUED_MESSAGES_SIZE       1024
-#      else
-#        define WS_MIN_QUEUED_MESSAGES_SIZE       4096
-#      endif
-#  endif
+#ifndef WS_MIN_QUEUED_MESSAGES_SIZE
+#    if defined(ESP8266)
+#        define WS_MIN_QUEUED_MESSAGES_SIZE       2048
+#    else
+#        define WS_MIN_QUEUED_MESSAGES_SIZE       8192
+#    endif
 #endif
 
 #ifdef ESP32
