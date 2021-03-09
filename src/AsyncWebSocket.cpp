@@ -603,7 +603,7 @@ void AsyncWebSocketClient::_queueMessage(AsyncWebSocketMessage *dataMessage){
       static uint32_t queueWarningDelayTime = 0;
       static uint32_t queueWarningRepeated = 0;
       if (millis() > queueWarningDelayTime) {
-          queueWarningDelayTime = millis() + 30000;
+        queueWarningDelayTime = millis() + 30000;
         __DBG_printf("Too many messages queued (repeated %u times)", queueWarningRepeated);
         queueWarningRepeated = 0;
       }
