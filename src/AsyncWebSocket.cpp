@@ -599,7 +599,18 @@ void AsyncWebSocketClient::_queueMessage(AsyncWebSocketMessage *dataMessage){
   __kfcfw_queue_monitor(dataMessage, _client, _server);
 #endif
   if(_queueIsFull()){
-      __DBG_printf("Too many messages queued");
+#if defined(HAVE_KFC_FIRMWARE_VERSION) && DEBUG
+      static uint32_t queueWarningDelayTime = 0;
+      static uint32_t queueWarningRepeated = 0;
+      if (millis() > queueWarningDelayTime) {
+          queueWarningDelayTime = millis() + 30000;
+        __DBG_printf("Too many messages queued (repeated %u times)", queueWarningRepeated);
+        queueWarningRepeated = 0;
+      }
+      else {
+        queueWarningRepeated++;
+      }
+#endif
       delete dataMessage;
   } else {
       _messageQueue.add(dataMessage);

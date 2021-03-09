@@ -81,6 +81,7 @@ class AsyncWebSocket;
 class AsyncWebSocketResponse;
 class AsyncWebSocketClient;
 class AsyncWebSocketControl;
+class WsClient;
 
 typedef struct {
     /** Message type as defined by enum AwsFrameType.
@@ -136,6 +137,7 @@ class AsyncWebSocketMessageBuffer {
     bool canDelete() { return (!_count && !_lock); }
 
     friend AsyncWebSocket;
+    friend WsClient;
 
 };
 
