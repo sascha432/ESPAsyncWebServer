@@ -91,9 +91,10 @@ AsyncWebServerRequest::~AsyncWebServerRequest(){
     free(_tempObject);
   }
 
-  if(_tempFile){
-    _tempFile.close();
-  }
+  // redundant code, File objects are closed when destroyed
+//   if(_tempFile){
+//     _tempFile.close();
+//   }
 }
 
 void AsyncWebServerRequest::_onData(void *buf, size_t len){
@@ -595,30 +596,13 @@ size_t AsyncWebServerRequest::headers() const{
   return _headers.length();
 }
 
-bool AsyncWebServerRequest::hasHeader(const String& name) const {
+AsyncWebHeader* AsyncWebServerRequest::getHeader(PGM_P name) const {
   for(const auto& h: _headers){
-    if(h->name().equalsIgnoreCase(name)){
-      return true;
-    }
-  }
-  return false;
-}
-
-bool AsyncWebServerRequest::hasHeader(const __FlashStringHelper * data) const {
-  return hasHeader(String(data));
-}
-
-AsyncWebHeader* AsyncWebServerRequest::getHeader(const String& name) const {
-  for(const auto& h: _headers){
-    if(h->name().equalsIgnoreCase(name)){
+    if(strcasecmp_P(h->name().c_str(), name) == 0) {
       return h;
     }
   }
   return nullptr;
-}
-
-AsyncWebHeader* AsyncWebServerRequest::getHeader(const __FlashStringHelper * data) const {
-  return getHeader(String(data));
 }
 
 AsyncWebHeader* AsyncWebServerRequest::getHeader(size_t num) const {
@@ -630,30 +614,13 @@ size_t AsyncWebServerRequest::params() const {
   return _params.length();
 }
 
-bool AsyncWebServerRequest::hasParam(const String& name, bool post, bool file) const {
+AsyncWebParameter* AsyncWebServerRequest::getParam(PGM_P name, bool post, bool file) const {
   for(const auto& p: _params){
-    if(p->name() == name && p->isPost() == post && p->isFile() == file){
-      return true;
-    }
-  }
-  return false;
-}
-
-bool AsyncWebServerRequest::hasParam(const __FlashStringHelper * data, bool post, bool file) const {
-  return hasParam(String(data).c_str(), post, file);
-}
-
-AsyncWebParameter* AsyncWebServerRequest::getParam(const String& name, bool post, bool file) const {
-  for(const auto& p: _params){
-    if(p->name() == name && p->isPost() == post && p->isFile() == file){
+    if(strcmp_P(p->name().c_str(), name) == 0 && p->isPost() == post && p->isFile() == file){
       return p;
     }
   }
   return nullptr;
-}
-
-AsyncWebParameter* AsyncWebServerRequest::getParam(const __FlashStringHelper * data, bool post, bool file) const {
-  return getParam(String(data).c_str(), post, file);
 }
 
 AsyncWebParameter* AsyncWebServerRequest::getParam(size_t num) const {
@@ -819,31 +786,13 @@ void AsyncWebServerRequest::requestAuthentication(const char * realm, bool isDig
   send(r);
 }
 
-bool AsyncWebServerRequest::hasArg(const char* name) const {
+const String& AsyncWebServerRequest::arg(PGM_P name) const {
   for(const auto& arg: _params){
-    if(arg->name() == name){
-      return true;
-    }
-  }
-  return false;
-}
-
-bool AsyncWebServerRequest::hasArg(const __FlashStringHelper * data) const {
-  return hasArg(String(data).c_str());
-}
-
-
-const String& AsyncWebServerRequest::arg(const String& name) const {
-  for(const auto& arg: _params){
-    if(arg->name() == name){
+    if(strcmp_P(arg->name().c_str(), name)) {
       return arg->value();
     }
   }
   return emptyString;
-}
-
-const String& AsyncWebServerRequest::arg(const __FlashStringHelper * data) const {
-  return arg(String(data).c_str());
 }
 
 const String& AsyncWebServerRequest::arg(size_t i) const {
@@ -859,19 +808,14 @@ const String& AsyncWebServerRequest::pathArg(size_t i) const {
   return param ? **param : emptyString;
 }
 
-const String& AsyncWebServerRequest::header(const char* name) const {
-  AsyncWebHeader* h = getHeader(String(name));
+const String& AsyncWebServerRequest::header(PGM_P name) const {
+  AsyncWebHeader* h = getHeader(name);
   return h ? h->value() : emptyString;
 }
 
-const String& AsyncWebServerRequest::header(const __FlashStringHelper * data) const {
-  return header(String(data).c_str());
-};
-
-
 const String& AsyncWebServerRequest::header(size_t i) const {
   AsyncWebHeader* h = getHeader(i);
-  return h ?  h->value() : emptyString;
+  return h ? h->value() : emptyString;
 }
 
 const String& AsyncWebServerRequest::headerName(size_t i) const {

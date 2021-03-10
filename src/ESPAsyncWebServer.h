@@ -267,37 +267,131 @@ class AsyncWebServerRequest {
     AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, const uint8_t * content, size_t len, AwsTemplateProcessor callback=nullptr);
     AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, PGM_P content, AwsTemplateProcessor callback=nullptr);
 
-    size_t headers() const;                     // get header count
-    bool hasHeader(const String& name) const;   // check if header exists
-    bool hasHeader(const __FlashStringHelper * data) const;   // check if header exists
 
-    AsyncWebHeader* getHeader(const String& name) const;
-    AsyncWebHeader* getHeader(const __FlashStringHelper * data) const;
-    AsyncWebHeader* getHeader(size_t num) const;
-
-    size_t params() const;                      // get arguments count
-    bool hasParam(const String& name, bool post=false, bool file=false) const;
-    bool hasParam(const __FlashStringHelper * data, bool post=false, bool file=false) const;
-
-    AsyncWebParameter* getParam(const String& name, bool post=false, bool file=false) const;
-    AsyncWebParameter* getParam(const __FlashStringHelper * data, bool post, bool file) const;
+    inline __attribute__((__always_inline__))
+    bool hasParam(const String &name, bool post=false, bool file=false) const {
+        return getParam(_convertString(name), post, file) != nullptr;
+    }
+    inline __attribute__((__always_inline__))
+    bool hasParam(const __FlashStringHelper *name, bool post=false, bool file=false) const {
+        return getParam(_convertString(name), post, file) != nullptr;
+    }
+    inline __attribute__((__always_inline__))
+    AsyncWebParameter* getParam(const String &name, bool post=false, bool file=false) const {
+        return getParam(_convertString(name), post, file);
+    }
+    inline __attribute__((__always_inline__))
+    AsyncWebParameter* getParam(const __FlashStringHelper *name, bool post=false, bool file=false) const {
+        return getParam(_convertString(name), post, file);
+    }
+    AsyncWebParameter* getParam(PGM_P name, bool post=false, bool file=false) const;
     AsyncWebParameter* getParam(size_t num) const;
+    // get arguments count
+    size_t params() const;
 
-    size_t args() const { return params(); }     // get arguments count
-    const String& arg(const String& name) const; // get request argument value by name
-    const String& arg(const __FlashStringHelper * data) const; // get request argument value by F(name)
-    const String& arg(size_t i) const;           // get request argument value by number
-    const String& argName(size_t i) const;       // get request argument name by number
-    bool hasArg(const char* name) const;         // check if argument exists
-    bool hasArg(const __FlashStringHelper * data) const;         // check if F(argument) exists
+
+    // check if argument exists
+    inline __attribute__((__always_inline__))
+    bool hasArg(const String &name) const {
+        return hasArg(_convertString(name));
+    }
+    inline __attribute__((__always_inline__))
+    bool hasArg(const __FlashStringHelper *name) const {
+        return hasArg(_convertString(name));
+    }
+    inline __attribute__((__always_inline__))
+    bool hasArg(PGM_P name) const {
+        return std::addressof(arg(name)) != std::addressof(emptyString);
+    }
+    // get request argument value by name
+    inline __attribute__((__always_inline__))
+    const String& arg(const String &name) const {
+        return arg(_convertString(name));
+    }
+    inline __attribute__((__always_inline__))
+    const String& arg(const __FlashStringHelper *name) const {
+        return arg(_convertString(name));
+    }
+    const String& arg(PGM_P name) const;
+    // get arguments count
+    size_t args() const { return params(); }
+
+    // get request argument value by number
+    const String& arg(size_t i) const;
+    // get request argument name by number
+    const String& argName(size_t i) const;
 
     const String& ASYNCWEBSERVER_REGEX_ATTRIBUTE pathArg(size_t i) const;
 
-    const String& header(const char* name) const;// get request header value by name
-    const String& header(const __FlashStringHelper * data) const;// get request header value by F(name)
-    const String& header(size_t i) const;        // get request header value by number
-    const String& headerName(size_t i) const;    // get request header name by number
+    // get header count
+    size_t headers() const;
+    // check if header exists
+    inline __attribute__((__always_inline__))
+    bool hasHeader(const String &name) const {
+        return hasHeader(_convertString(name));
+    }
+    inline __attribute__((__always_inline__))
+    bool hasHeader(const __FlashStringHelper *name) const {
+        return hasHeader(_convertString(name));
+    }
+    inline __attribute__((__always_inline__))
+    bool hasHeader(PGM_P name) const {
+        return getHeader(name) != nullptr;
+    }
+    // get request header by name
+    inline __attribute__((__always_inline__))
+    AsyncWebHeader *getHeader(const String &name) const {
+        return getHeader(_convertString(name));
+    }
+    inline __attribute__((__always_inline__))
+    AsyncWebHeader *getHeader(const __FlashStringHelper *name) const {
+        return getHeader(_convertString(name));
+    }
+    AsyncWebHeader *getHeader(PGM_P name) const;
+    AsyncWebHeader* getHeader(size_t num) const;
+
+    // get request header value by name
+    inline __attribute__((__always_inline__))
+    const String &header(const String &name) const {
+        return header(_convertString(name));
+    }
+    inline __attribute__((__always_inline__))
+    const String &header(const __FlashStringHelper *name) const {
+        return header(_convertString(name));
+    }
+    const String& header(PGM_P name) const;
+
+    // get request header value by number
+    const String& header(size_t i) const;
+    // get request header name by number
+    const String& headerName(size_t i) const;
+
+    inline __attribute__((__always_inline__))
+    LinkedList<AsyncWebHeader *> &getHeaders() {
+        return _headers;
+    }
+    inline __attribute__((__always_inline__))
+    const LinkedList<AsyncWebHeader *> &getHeaders() const {
+        return _headers;
+    }
+
     String urlDecode(const String& text) const;
+
+private:
+    inline __attribute__((__always_inline__))
+    PGM_P _convertString(const String &name) const {
+        return name.c_str();
+    }
+
+    inline __attribute__((__always_inline__))
+    PGM_P _convertString(const __FlashStringHelper *name) const {
+        return reinterpret_cast<PGM_P>(name);
+    }
+
+    inline __attribute__((__always_inline__))
+    PGM_P _convertString(const char *name) const {
+        return reinterpret_cast<PGM_P>(name);
+    }
 };
 
 /*
