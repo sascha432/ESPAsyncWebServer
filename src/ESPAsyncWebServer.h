@@ -268,53 +268,66 @@ class AsyncWebServerRequest {
     AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, PGM_P content, AwsTemplateProcessor callback=nullptr);
 
 
-    inline __attribute__((__always_inline__))
-    bool hasParam(const String &name, bool post=false, bool file=false) const {
-        return getParam(_convertString(name), post, file) != nullptr;
-    }
-    inline __attribute__((__always_inline__))
-    bool hasParam(const __FlashStringHelper *name, bool post=false, bool file=false) const {
-        return getParam(_convertString(name), post, file) != nullptr;
-    }
-    inline __attribute__((__always_inline__))
-    AsyncWebParameter* getParam(const String &name, bool post=false, bool file=false) const {
-        return getParam(_convertString(name), post, file);
-    }
-    inline __attribute__((__always_inline__))
-    AsyncWebParameter* getParam(const __FlashStringHelper *name, bool post=false, bool file=false) const {
-        return getParam(_convertString(name), post, file);
-    }
-    AsyncWebParameter* getParam(PGM_P name, bool post=false, bool file=false) const;
-    AsyncWebParameter* getParam(size_t num) const;
+    // copying PROGMEM strings into memory provides a better performance
+    // when it comes to long strings. strcmp is about 10 times faster than
+    // strcmp_P. since strcmp/strcmp_P is only executed when the length
+    // of both strings matches and the overhead of the the entire loop
+    // is taken into account, there is not much left. String and const char *
+    // are using strcmp, const __FLashStringHelper * is using strcmp_P
+    //
+    // For best performance, use the correct tpype, do not convert PROGMEM or
+    // or const char into String objects, use const ref to store the
+    // return values instead of copying the entire string and do not use
+    // hasArg() + arg() etc... since it is executing the exact same code just
+    // returning a different type of result
+    //
+    // after retrieving the value, argExists() and headerExists() can
+    // be used to determine if length is 0 or if the argument/header does not
+    // exist without calling hasArg/hasHeader
+    //
+    // const String *pUsername;
+    // if ((pUsername = &request->arg(F("username")))->length() != 0) {
+    //      // not empty
+    // }
+    // else if (request.argExists(*pUsername)) {
+    //     // empty
+    // }
+    //
+    // auto &username = request->arg(F("username"));
+    // if (request.argExists(username)) {
+    //     if (username.length() == 0) {
+    //         // could be emtpy!
+    //     }
+    // }
+
+    static constexpr size_t kAutoStrLen = ~0;
+
+    // check if parameter exists
+    bool hasParam(const String &name, bool post = false, bool file = false) const;
+    bool hasParam(const __FlashStringHelper *name, bool post = false, bool file = false) const;
+    bool hasParam(const char *name, bool post = false, bool file = false, size_t len = kAutoStrLen) const;
+
+    // get parameter
+    AsyncWebParameter *getParam(const String &name, bool post = false, bool file = false) const;
+    AsyncWebParameter *getParam(const __FlashStringHelper *name, bool post = false, bool file = false) const;
+    AsyncWebParameter *getParam(const char *name, bool post = false, bool file = false, size_t len = kAutoStrLen) const;
+
+    AsyncWebParameter *getParam(size_t num) const;
     // get arguments count
     size_t params() const;
 
-
-    // check if argument exists
-    inline __attribute__((__always_inline__))
-    bool hasArg(const String &name) const {
-        return hasArg(_convertString(name));
-    }
-    inline __attribute__((__always_inline__))
-    bool hasArg(const __FlashStringHelper *name) const {
-        return hasArg(_convertString(name));
-    }
-    inline __attribute__((__always_inline__))
-    bool hasArg(PGM_P name) const {
-        return std::addressof(arg(name)) != std::addressof(emptyString);
-    }
-    // get request argument value by name
-    inline __attribute__((__always_inline__))
-    const String& arg(const String &name) const {
-        return arg(_convertString(name));
-    }
-    inline __attribute__((__always_inline__))
-    const String& arg(const __FlashStringHelper *name) const {
-        return arg(_convertString(name));
-    }
-    const String& arg(PGM_P name) const;
     // get arguments count
     size_t args() const { return params(); }
+    // check if argument exists
+    bool hasArg(const String &name) const;
+    bool hasArg(const __FlashStringHelper *name) const;
+    bool hasArg(const char *name, size_t len = kAutoStrLen) const;
+
+    // get request argument value by name
+    const String &arg(const String &name) const;
+    const String &arg(const __FlashStringHelper *name) const;
+    const String &arg(const char *name, size_t len = kAutoStrLen) const;
+    //---
 
     // get request argument value by number
     const String& arg(size_t i) const;
@@ -326,46 +339,35 @@ class AsyncWebServerRequest {
     // get header count
     size_t headers() const;
     // check if header exists
-    inline __attribute__((__always_inline__))
-    bool hasHeader(const String &name) const {
-        return hasHeader(_convertString(name));
-    }
-    inline __attribute__((__always_inline__))
-    bool hasHeader(const __FlashStringHelper *name) const {
-        return hasHeader(_convertString(name));
-    }
-    inline __attribute__((__always_inline__))
-    bool hasHeader(PGM_P name) const {
-        return getHeader(name) != nullptr;
-    }
+    bool hasHeader(const String &name) const;
+    bool hasHeader(const __FlashStringHelper *name) const;
+    bool hasHeader(const char *name, size_t len = kAutoStrLen) const;
+
     // get request header by name
-    inline __attribute__((__always_inline__))
-    AsyncWebHeader *getHeader(const String &name) const {
-        return getHeader(_convertString(name));
-    }
-    inline __attribute__((__always_inline__))
-    AsyncWebHeader *getHeader(const __FlashStringHelper *name) const {
-        return getHeader(_convertString(name));
-    }
-    AsyncWebHeader *getHeader(PGM_P name) const;
+    AsyncWebHeader *getHeader(const String &name) const;
+    AsyncWebHeader *getHeader(const __FlashStringHelper *name) const;
+    AsyncWebHeader *getHeader(const char *name, size_t len = kAutoStrLen) const;
+    //---
+
+    // get header by index
     AsyncWebHeader* getHeader(size_t num) const;
 
     // get request header value by name
-    inline __attribute__((__always_inline__))
-    const String &header(const String &name) const {
-        return header(_convertString(name));
-    }
-    inline __attribute__((__always_inline__))
-    const String &header(const __FlashStringHelper *name) const {
-        return header(_convertString(name));
-    }
-    const String& header(PGM_P name) const;
+    const String &header(const String &name) const;
+    const String &header(const __FlashStringHelper *name) const;
+    const String &header(const char *name, size_t len = kAutoStrLen) const;
 
     // get request header value by number
-    const String& header(size_t i) const;
+    const String &header(size_t i) const;
     // get request header name by number
-    const String& headerName(size_t i) const;
+    const String &headerName(size_t i) const;
 
+    // returns true if arg() or header() exist
+    static bool argExists(const String &str);
+    // alias for argExists()
+    static bool headerExists(const String &str);
+
+    // get linkd list of the headers
     inline __attribute__((__always_inline__))
     LinkedList<AsyncWebHeader *> &getHeaders() {
         return _headers;
@@ -375,24 +377,137 @@ class AsyncWebServerRequest {
         return _headers;
     }
 
-    String urlDecode(const String& text) const;
+    enum class UrlDecodeErrorType {
+        NONE = 0,
+        NOT_ENOUGH_DIGITS,
+        INVALID_CHARACTERS,
+    };
 
-private:
-    inline __attribute__((__always_inline__))
-    PGM_P _convertString(const String &name) const {
-        return name.c_str();
-    }
-
-    inline __attribute__((__always_inline__))
-    PGM_P _convertString(const __FlashStringHelper *name) const {
-        return reinterpret_cast<PGM_P>(name);
-    }
-
-    inline __attribute__((__always_inline__))
-    PGM_P _convertString(const char *name) const {
-        return reinterpret_cast<PGM_P>(name);
-    }
+    // if any error occurs and returnEmptyOnMalformedInput is not nullptr,
+    // the error is stored in returnEmptyOnMalformedInput and an emtpy string returned
+    // on success returnEmptyOnMalformedInput is set to UrlDecodeErrorType::NONE
+    static String urlDecode(const String& text, UrlDecodeErrorType *returnEmptyOnMalformedInput = nullptr);
 };
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::hasParam(const String &name, bool post, bool file) const {
+    return getParam(name.c_str(), post, file, name.length()) != nullptr;
+}
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::hasParam(const __FlashStringHelper *name, bool post, bool file) const {
+    return getParam(name, post, file) != nullptr;
+}
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::hasParam(const char *name, bool post, bool file, size_t len) const {
+    return getParam(name, post, file, len) != nullptr;
+}
+
+inline __attribute__((__always_inline__))
+AsyncWebParameter *AsyncWebServerRequest::getParam(const String &name, bool post, bool file) const {
+    return getParam(name.c_str(), post, file, name.length());
+}
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::hasHeader(const String &name) const {
+    return hasHeader(name.c_str(), name.length());
+}
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::hasHeader(const __FlashStringHelper *name) const {
+    return getHeader(name) != nullptr;
+}
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::hasHeader(const char *name, size_t len) const {
+    return getHeader(name, len) != nullptr;
+}
+
+inline __attribute__((__always_inline__))
+AsyncWebHeader *AsyncWebServerRequest::getHeader(const String &name) const {
+    return getHeader(name.c_str(), name.length());
+}
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::hasArg(const String &name) const {
+    return hasArg(name.c_str(), name.length());
+}
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::hasArg(const __FlashStringHelper *name) const {
+    return std::addressof(arg(name)) != std::addressof(emptyString);
+}
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::hasArg(const char *name, size_t len) const {
+    return std::addressof(arg(name, len)) != std::addressof(emptyString);
+}
+
+inline __attribute__((__always_inline__))
+const String &AsyncWebServerRequest::header(const String &name) const {
+    return header(name.c_str(), name.length());
+}
+
+inline __attribute__((__always_inline__))
+const String &AsyncWebServerRequest::header(const __FlashStringHelper *name) const {
+  AsyncWebHeader *h = getHeader(name);
+  return h ? h->value() : emptyString;
+}
+
+inline __attribute__((__always_inline__))
+const String &AsyncWebServerRequest::header(const char *name, size_t len) const {
+  AsyncWebHeader *h = getHeader(name, len);
+  return h ? h->value() : emptyString;
+}
+
+inline __attribute__((__always_inline__))
+const String &AsyncWebServerRequest::arg(const String &name) const {
+    return arg(name.c_str(), name.length());
+}
+
+inline __attribute__((__always_inline__))
+const String &AsyncWebServerRequest::arg(size_t i) const
+{
+  return getParam(i)->value();
+}
+
+inline __attribute__((__always_inline__))
+const String &AsyncWebServerRequest::argName(size_t i) const
+{
+  return getParam(i)->name();
+}
+
+inline __attribute__((__always_inline__))
+const String &AsyncWebServerRequest::pathArg(size_t i) const
+{
+  auto param = _pathParams.nth(i);
+  return param ? **param : emptyString;
+}
+
+inline __attribute__((__always_inline__))
+const String &AsyncWebServerRequest::header(size_t i) const
+{
+  AsyncWebHeader *h = getHeader(i);
+  return h ? h->value() : emptyString;
+}
+
+inline __attribute__((__always_inline__))
+const String &AsyncWebServerRequest::headerName(size_t i) const
+{
+  AsyncWebHeader *h = getHeader(i);
+  return h ? h->name() : emptyString;
+}
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::argExists(const String &str) {
+    return std::addressof(str) != std::addressof(emptyString);
+}
+
+inline __attribute__((__always_inline__))
+bool AsyncWebServerRequest::headerExists(const String &str) {
+    return argExists(str);
+}
 
 /*
  * FILTER :: Callback to filter AsyncWebRewrite and AsyncWebHandler (done by the Server)

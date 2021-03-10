@@ -30,7 +30,7 @@
 
 enum { PARSE_REQ_START, PARSE_REQ_HEADERS, PARSE_REQ_BODY, PARSE_REQ_END, PARSE_REQ_FAIL };
 
-AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer* s, AsyncClient* c)
+AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   : _client(c)
   , _server(s)
   , _handler(NULL)
@@ -67,12 +67,12 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer* s, AsyncClient* c)
   , _itemIsFile(false)
   , _tempObject(NULL)
 {
-  c->onError([](void *r, AsyncClient* c, int8_t error){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onError(error); }, this);
-  c->onAck([](void *r, AsyncClient* c, size_t len, uint32_t time){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onAck(len, time); }, this);
-  c->onDisconnect([](void *r, AsyncClient* c){ AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onDisconnect(); delete c; }, this);
-  c->onTimeout([](void *r, AsyncClient* c, uint32_t time){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onTimeout(time); }, this);
-  c->onData([](void *r, AsyncClient* c, void *buf, size_t len){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onData(buf, len); }, this);
-  c->onPoll([](void *r, AsyncClient* c){ (void)c; AsyncWebServerRequest *req = ( AsyncWebServerRequest*)r; req->_onPoll(); }, this);
+  c->onError([](void *r, AsyncClient *c, int8_t error){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onError(error); }, this);
+  c->onAck([](void *r, AsyncClient *c, size_t len, uint32_t time){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onAck(len, time); }, this);
+  c->onDisconnect([](void *r, AsyncClient *c){ AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onDisconnect(); delete c; }, this);
+  c->onTimeout([](void *r, AsyncClient *c, uint32_t time){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onTimeout(time); }, this);
+  c->onData([](void *r, AsyncClient *c, void *buf, size_t len){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onData(buf, len); }, this);
+  c->onPoll([](void *r, AsyncClient *c){ (void)c; AsyncWebServerRequest *req = ( AsyncWebServerRequest*)r; req->_onPoll(); }, this);
 }
 
 AsyncWebServerRequest::~AsyncWebServerRequest(){
@@ -179,7 +179,7 @@ void AsyncWebServerRequest::_onData(void *buf, size_t len){
 
 void AsyncWebServerRequest::_removeNotInterestingHeaders(){
   if (_interestingHeaders.containsIgnoreCase(F("ANY"))) return; // nothing to do
-  for(const auto& header: _headers){
+  for(const auto &header: _headers){
       if(!_interestingHeaders.containsIgnoreCase(header->name().c_str())){
         _headers.remove(header);
       }
@@ -199,7 +199,7 @@ void AsyncWebServerRequest::_onAck(size_t len, uint32_t time){
     if(!_response->_finished()){
       _response->_ack(this, len, time);
     } else {
-      AsyncWebServerResponse* r = _response;
+      AsyncWebServerResponse *r = _response;
       _response = NULL;
       delete r;
     }
@@ -236,7 +236,7 @@ void AsyncWebServerRequest::_addPathParam(const char *p){
   _pathParams.add(new String(p));
 }
 
-void AsyncWebServerRequest::_addGetParams(const String& params){
+void AsyncWebServerRequest::_addGetParams(const String &params){
   size_t start = 0;
   while (start < params.length()){
     int end = params.indexOf('&', start);
@@ -596,16 +596,7 @@ size_t AsyncWebServerRequest::headers() const{
   return _headers.length();
 }
 
-AsyncWebHeader* AsyncWebServerRequest::getHeader(PGM_P name) const {
-  for(const auto& h: _headers){
-    if(strcasecmp_P(h->name().c_str(), name) == 0) {
-      return h;
-    }
-  }
-  return nullptr;
-}
-
-AsyncWebHeader* AsyncWebServerRequest::getHeader(size_t num) const {
+AsyncWebHeader *AsyncWebServerRequest::getHeader(size_t num) const {
   auto header = _headers.nth(num);
   return header ? *header : nullptr;
 }
@@ -614,21 +605,12 @@ size_t AsyncWebServerRequest::params() const {
   return _params.length();
 }
 
-AsyncWebParameter* AsyncWebServerRequest::getParam(PGM_P name, bool post, bool file) const {
-  for(const auto& p: _params){
-    if(strcmp_P(p->name().c_str(), name) == 0 && p->isPost() == post && p->isFile() == file){
-      return p;
-    }
-  }
-  return nullptr;
-}
-
-AsyncWebParameter* AsyncWebServerRequest::getParam(size_t num) const {
+AsyncWebParameter *AsyncWebServerRequest::getParam(size_t num) const {
   auto param = _params.nth(num);
   return param ? *param : nullptr;
 }
 
-void AsyncWebServerRequest::addInterestingHeader(const String& name){
+void AsyncWebServerRequest::addInterestingHeader(const String &name){
   if(!_interestingHeaders.containsIgnoreCase(name))
     _interestingHeaders.add(name);
 }
@@ -651,91 +633,91 @@ void AsyncWebServerRequest::send(AsyncWebServerResponse *response){
   }
 }
 
-AsyncWebServerResponse * AsyncWebServerRequest::beginResponse(int code, const String& contentType, const String& content){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(int code, const String &contentType, const String &content){
   return new AsyncBasicResponse(code, contentType, content);
 }
 
-AsyncWebServerResponse * AsyncWebServerRequest::beginResponse(FS &fs, const String& path, const String& contentType, bool download, AwsTemplateProcessor callback){
-  if(fs.exists(path) || (!download && fs.exists(path+F(".gz"))))
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(FS &fs, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback){
+  if(fs.exists(path) || (!download && fs.exists(path + F(".gz"))))
     return new AsyncFileResponse(fs, path, contentType, download, callback);
   return NULL;
 }
 
-AsyncWebServerResponse * AsyncWebServerRequest::beginResponse(File content, const String& path, const String& contentType, bool download, AwsTemplateProcessor callback){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(File content, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback){
   if(content == true)
     return new AsyncFileResponse(content, path, contentType, download, callback);
   return NULL;
 }
 
-AsyncWebServerResponse * AsyncWebServerRequest::beginResponse(Stream &stream, const String& contentType, size_t len, AwsTemplateProcessor callback){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(Stream &stream, const String &contentType, size_t len, AwsTemplateProcessor callback){
   return new AsyncStreamResponse(stream, contentType, len, callback);
 }
 
-AsyncWebServerResponse * AsyncWebServerRequest::beginResponse(const String& contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(const String &contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
   return new AsyncCallbackResponse(contentType, len, callback, templateCallback);
 }
 
-AsyncWebServerResponse * AsyncWebServerRequest::beginChunkedResponse(const String& contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
+AsyncWebServerResponse *AsyncWebServerRequest::beginChunkedResponse(const String &contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
   if(_version)
     return new AsyncChunkedResponse(contentType, callback, templateCallback);
   return new AsyncCallbackResponse(contentType, 0, callback, templateCallback);
 }
 
-AsyncResponseStream * AsyncWebServerRequest::beginResponseStream(const String& contentType, size_t bufferSize){
+AsyncResponseStream *AsyncWebServerRequest::beginResponseStream(const String &contentType, size_t bufferSize){
   return new AsyncResponseStream(contentType, bufferSize);
 }
 
-AsyncWebServerResponse * AsyncWebServerRequest::beginResponse_P(int code, const String& contentType, const uint8_t * content, size_t len, AwsTemplateProcessor callback){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse_P(int code, const String &contentType, const uint8_t *content, size_t len, AwsTemplateProcessor callback){
   return new AsyncProgmemResponse(code, contentType, content, len, callback);
 }
 
-AsyncWebServerResponse * AsyncWebServerRequest::beginResponse_P(int code, const String& contentType, PGM_P content, AwsTemplateProcessor callback){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse_P(int code, const String &contentType, PGM_P content, AwsTemplateProcessor callback){
   return beginResponse_P(code, contentType, (const uint8_t *)content, strlen_P(content), callback);
 }
 
-void AsyncWebServerRequest::send(int code, const String& contentType, const String& content){
+void AsyncWebServerRequest::send(int code, const String &contentType, const String &content){
   send(beginResponse(code, contentType, content));
 }
 
-void AsyncWebServerRequest::send(FS &fs, const String& path, const String& contentType, bool download, AwsTemplateProcessor callback){
+void AsyncWebServerRequest::send(FS &fs, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback){
   if(fs.exists(path) || (!download && fs.exists(path+F(".gz")))){
     send(beginResponse(fs, path, contentType, download, callback));
   } else send(404);
 }
 
-void AsyncWebServerRequest::send(File content, const String& path, const String& contentType, bool download, AwsTemplateProcessor callback){
+void AsyncWebServerRequest::send(File content, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback){
   if(content == true){
     send(beginResponse(content, path, contentType, download, callback));
   } else send(404);
 }
 
-void AsyncWebServerRequest::send(Stream &stream, const String& contentType, size_t len, AwsTemplateProcessor callback){
+void AsyncWebServerRequest::send(Stream &stream, const String &contentType, size_t len, AwsTemplateProcessor callback){
   send(beginResponse(stream, contentType, len, callback));
 }
 
-void AsyncWebServerRequest::send(const String& contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
+void AsyncWebServerRequest::send(const String &contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
   send(beginResponse(contentType, len, callback, templateCallback));
 }
 
-void AsyncWebServerRequest::sendChunked(const String& contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
+void AsyncWebServerRequest::sendChunked(const String &contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
   send(beginChunkedResponse(contentType, callback, templateCallback));
 }
 
-void AsyncWebServerRequest::send_P(int code, const String& contentType, const uint8_t * content, size_t len, AwsTemplateProcessor callback){
+void AsyncWebServerRequest::send_P(int code, const String &contentType, const uint8_t *content, size_t len, AwsTemplateProcessor callback){
   send(beginResponse_P(code, contentType, content, len, callback));
 }
 
-void AsyncWebServerRequest::send_P(int code, const String& contentType, PGM_P content, AwsTemplateProcessor callback){
+void AsyncWebServerRequest::send_P(int code, const String &contentType, PGM_P content, AwsTemplateProcessor callback){
   send(beginResponse_P(code, contentType, content, callback));
 }
 
-void AsyncWebServerRequest::redirect(const String& url){
-  AsyncWebServerResponse * response = beginResponse(302);
+void AsyncWebServerRequest::redirect(const String &url){
+  AsyncWebServerResponse *response = beginResponse(302);
   response->addHeader(F("Location"), url);
   send(response);
 }
 
-bool AsyncWebServerRequest::authenticate(const char * username, const char * password, const char * realm, bool passwordIsHash){
+bool AsyncWebServerRequest::authenticate(const char *username, const char *password, const char *realm, bool passwordIsHash){
   if(_authorization.length()){
     if(_isDigest)
       return checkDigestAuthentication(_authorization.c_str(), methodToString(), username, password, realm, passwordIsHash, NULL, NULL, NULL);
@@ -747,7 +729,7 @@ bool AsyncWebServerRequest::authenticate(const char * username, const char * pas
   return false;
 }
 
-bool AsyncWebServerRequest::authenticate(const char * hash){
+bool AsyncWebServerRequest::authenticate(const char *hash){
   if(!_authorization.length() || hash == NULL)
     return false;
 
@@ -769,8 +751,8 @@ bool AsyncWebServerRequest::authenticate(const char * hash){
   return (_authorization.equals(hash));
 }
 
-void AsyncWebServerRequest::requestAuthentication(const char * realm, bool isDigest){
-  AsyncWebServerResponse * r = beginResponse(401);
+void AsyncWebServerRequest::requestAuthentication(const char *realm, bool isDigest){
+  AsyncWebServerResponse *r = beginResponse(401);
   if(!isDigest && realm == NULL){
     r->addHeader(F("WWW-Authenticate"), F("Basic realm=\"Login Required\""));
   } else if(!isDigest){
@@ -786,94 +768,175 @@ void AsyncWebServerRequest::requestAuthentication(const char * realm, bool isDig
   send(r);
 }
 
-const String& AsyncWebServerRequest::arg(PGM_P name) const {
-  for(const auto& arg: _params){
-    if(strcmp_P(arg->name().c_str(), name)) {
+AsyncWebParameter *AsyncWebServerRequest::getParam(const __FlashStringHelper *name, bool post, bool file) const
+{
+  auto len = strlen_P(reinterpret_cast<PGM_P>(name));
+  for (const auto &p : _params) {
+    if (p->isPost() == post && p->isFile() == file && len == p->name().length() && strcmp_P(p->name().c_str(), reinterpret_cast<PGM_P>(name)) == 0) {
+      return p;
+    }
+  }
+  return nullptr;
+}
+
+AsyncWebParameter *AsyncWebServerRequest::getParam(const char *name, bool post, bool file, size_t len) const
+{
+  if (len == kAutoStrLen) {
+    len = strlen(name);
+  }
+  for (const auto &p : _params) {
+    if (p->isPost() == post && p->isFile() == file && len == p->name().length() && strcmp(p->name().c_str(), name) == 0) {
+      return p;
+    }
+  }
+  return nullptr;
+}
+
+AsyncWebHeader *AsyncWebServerRequest::getHeader(const __FlashStringHelper *name) const
+{
+  auto len = strlen_P(reinterpret_cast<PGM_P>(name));
+  for (const auto &h : _headers) {
+    if (len == h->name().length() && strcasecmp_P(h->name().c_str(), reinterpret_cast<PGM_P>(name)) == 0) {
+      return h;
+    }
+  }
+  return nullptr;
+}
+
+AsyncWebHeader *AsyncWebServerRequest::getHeader(const char *name, size_t len) const
+{
+  if (len == kAutoStrLen) {
+    len = strlen(name);
+  }
+  for (const auto &h : _headers) {
+    if (len == h->name().length() && strcasecmp(h->name().c_str(), name) == 0) {
+      return h;
+    }
+  }
+  return nullptr;
+}
+
+const String &AsyncWebServerRequest::arg(const __FlashStringHelper *name) const
+{
+  auto len = strlen_P(reinterpret_cast<PGM_P>(name));
+  for (const auto &arg : _params) {
+    if (len == arg->name().length() && strcmp_P(arg->name().c_str(), reinterpret_cast<PGM_P>(name)) == 0) {
       return arg->value();
     }
   }
   return emptyString;
 }
 
-const String& AsyncWebServerRequest::arg(size_t i) const {
-  return getParam(i)->value();
-}
-
-const String& AsyncWebServerRequest::argName(size_t i) const {
-  return getParam(i)->name();
-}
-
-const String& AsyncWebServerRequest::pathArg(size_t i) const {
-  auto param = _pathParams.nth(i);
-  return param ? **param : emptyString;
-}
-
-const String& AsyncWebServerRequest::header(PGM_P name) const {
-  AsyncWebHeader* h = getHeader(name);
-  return h ? h->value() : emptyString;
-}
-
-const String& AsyncWebServerRequest::header(size_t i) const {
-  AsyncWebHeader* h = getHeader(i);
-  return h ? h->value() : emptyString;
-}
-
-const String& AsyncWebServerRequest::headerName(size_t i) const {
-  AsyncWebHeader* h = getHeader(i);
-  return h ? h->name() : emptyString;
-}
-
-String AsyncWebServerRequest::urlDecode(const String& text) const {
-  char temp[] = "0x00";
-  unsigned int len = text.length();
-  unsigned int i = 0;
-  String decoded = String();
-  decoded.reserve(len); // Allocate the string internal buffer - never longer from source text
-  while (i < len){
-    char decodedChar;
-    char encodedChar = text.charAt(i++);
-    if ((encodedChar == '%') && (i + 1 < len)){
-      temp[2] = text.charAt(i++);
-      temp[3] = text.charAt(i++);
-      decodedChar = strtol(temp, NULL, 16);
-    } else if (encodedChar == '+') {
-      decodedChar = ' ';
-    } else {
-      decodedChar = encodedChar;  // normal ascii char
+const String &AsyncWebServerRequest::arg(const char *name, size_t len) const
+{
+  if (len == kAutoStrLen) {
+    len = strlen(name);
+  }
+  for (const auto &arg : _params) {
+    if (len == arg->name().length() && strcmp(arg->name().c_str(), name) == 0) {
+      return arg->value();
     }
-    decoded.concat(decodedChar);
+  }
+  return emptyString;
+}
+
+String AsyncWebServerRequest::urlDecode(const String &text, UrlDecodeErrorType *returnEmptyOnMalformedInput)
+{
+  String decoded;
+  decoded.reserve(text.length()); // Allocate the string internal buffer - never longer from source text
+  auto *ptr = text.c_str();
+  char temp[3];
+  temp[2] = 0;
+  while (*ptr) {
+    char encodedChar = *ptr++;
+    if (encodedChar == '%') {
+      if (((temp[0] = *ptr) != 0) && ((temp[1] = *(ptr + 1)) != 0)) {
+        ptr += 2;
+        char *endPtr = nullptr;
+        decoded.concat(encodedChar = static_cast<char>(strtoul(temp, &endPtr, 16)));
+        if (endPtr != &temp[2]) {
+          if (returnEmptyOnMalformedInput) { // invalid characters after % (2 hex digits required, [0-9a-fA-F])
+            *returnEmptyOnMalformedInput = UrlDecodeErrorType::INVALID_CHARACTERS;
+            return String();
+          }
+          else {
+            if (endPtr == &temp[0]) {
+              ptr -= 2;
+            }
+            else if (endPtr == &temp[1]) {
+              ptr--;
+            }
+          }
+        }
+      }
+      else if (returnEmptyOnMalformedInput) { // not enough digits after % (2 required)
+        *returnEmptyOnMalformedInput = UrlDecodeErrorType::NOT_ENOUGH_DIGITS;
+        return String();
+      }
+    }
+    else if (encodedChar == '+') {
+      decoded.concat(' ');
+    }
+    else {
+      decoded.concat(encodedChar); // normal ascii char
+    }
+  }
+  if (returnEmptyOnMalformedInput) {
+    *returnEmptyOnMalformedInput = UrlDecodeErrorType::NONE;
   }
   return decoded;
 }
 
-
-const __FlashStringHelper *AsyncWebServerRequest::methodToString() const {
-  if(_method == HTTP_ANY) return F("ANY");
-  else if(_method & HTTP_GET) return F("GET");
-  else if(_method & HTTP_POST) return F("POST");
-  else if(_method & HTTP_DELETE) return F("DELETE");
-  else if(_method & HTTP_PUT) return F("PUT");
-  else if(_method & HTTP_PATCH) return F("PATCH");
-  else if(_method & HTTP_HEAD) return F("HEAD");
-  else if(_method & HTTP_OPTIONS) return F("OPTIONS");
+const __FlashStringHelper *AsyncWebServerRequest::methodToString() const
+{
+  if (_method == HTTP_ANY) {
+    return F("ANY");
+  } else if (_method & HTTP_GET) {
+    return F("GET");
+  } else if (_method & HTTP_POST) {
+    return F("POST");
+  } else if (_method & HTTP_DELETE) {
+    return F("DELETE");
+  } else if (_method & HTTP_PUT) {
+    return F("PUT");
+  } else if (_method & HTTP_PATCH) {
+    return F("PATCH");
+  } else if (_method & HTTP_HEAD) {
+    return F("HEAD");
+  } else if (_method & HTTP_OPTIONS) {
+    return F("OPTIONS");
+  }
   return F("UNKNOWN");
 }
 
-const __FlashStringHelper *AsyncWebServerRequest::requestedConnTypeToString() const {
+const __FlashStringHelper *AsyncWebServerRequest::requestedConnTypeToString() const
+{
   switch (_reqconntype) {
-    case RCT_NOT_USED: return F("RCT_NOT_USED");
-    case RCT_DEFAULT:  return F("RCT_DEFAULT");
-    case RCT_HTTP:     return F("RCT_HTTP");
-    case RCT_WS:       return F("RCT_WS");
-    case RCT_EVENT:    return F("RCT_EVENT");
-    default:           return F("ERROR");
+  case RCT_NOT_USED:
+    return F("RCT_NOT_USED");
+  case RCT_DEFAULT:
+    return F("RCT_DEFAULT");
+  case RCT_HTTP:
+    return F("RCT_HTTP");
+  case RCT_WS:
+    return F("RCT_WS");
+  case RCT_EVENT:
+    return F("RCT_EVENT");
+  default:
+    return F("ERROR");
   }
 }
 
-bool AsyncWebServerRequest::isExpectedRequestedConnType(RequestedConnectionType erct1, RequestedConnectionType erct2, RequestedConnectionType erct3) {
-    bool res = false;
-    if ((erct1 != RCT_NOT_USED) && (erct1 == _reqconntype)) res = true;
-    if ((erct2 != RCT_NOT_USED) && (erct2 == _reqconntype)) res = true;
-    if ((erct3 != RCT_NOT_USED) && (erct3 == _reqconntype)) res = true;
-    return res;
+bool AsyncWebServerRequest::isExpectedRequestedConnType(RequestedConnectionType erct1, RequestedConnectionType erct2, RequestedConnectionType erct3)
+{
+  if ((erct1 != RCT_NOT_USED) && (erct1 == _reqconntype)) {
+    return true;
+  }
+  if ((erct2 != RCT_NOT_USED) && (erct2 == _reqconntype)) {
+    return true;
+  }
+  if ((erct3 != RCT_NOT_USED) && (erct3 == _reqconntype)) {
+    return true;
+  }
+  return false;
 }
