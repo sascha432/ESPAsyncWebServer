@@ -294,6 +294,7 @@ class AsyncWebServerRequest {
     // }
     //
     // auto &username = request->arg(F("username"));
+    // //   ^ must be const_ref for argExists to work
     // if (request.argExists(username)) {
     //     if (username.length() == 0) {
     //         // could be emtpy!
@@ -363,9 +364,22 @@ class AsyncWebServerRequest {
     const String &headerName(size_t i) const;
 
     // returns true if arg() or header() exist
-    static bool argExists(const String &str);
+    // a pointer or const_ref must be passed, any copy will return true
+    template<typename _Ta>
+    inline __attribute__((__always_inline__))
+    static bool argExists(_Ta &str) {
+        static_assert(std::is_const<_Ta>::value, "_Ta must be const_ref (const String &)");
+        return std::addressof(str) != std::addressof(emptyString);
+    }
+
     // alias for argExists()
-    static bool headerExists(const String &str);
+    // a pointer or const_ref must be passed, any copy will return true
+    template<typename _Ta>
+    inline __attribute__((__always_inline__))
+    static bool headerExists(_Ta &str) {
+        static_assert(std::is_const<_Ta>::value, "_Ta must be const_ref (const String &)");
+        return std::addressof(str) != std::addressof(emptyString);
+    }
 
     // get linkd list of the headers
     inline __attribute__((__always_inline__))
@@ -497,16 +511,6 @@ const String &AsyncWebServerRequest::headerName(size_t i) const
 {
   AsyncWebHeader *h = getHeader(i);
   return h ? h->name() : emptyString;
-}
-
-inline __attribute__((__always_inline__))
-bool AsyncWebServerRequest::argExists(const String &str) {
-    return std::addressof(str) != std::addressof(emptyString);
-}
-
-inline __attribute__((__always_inline__))
-bool AsyncWebServerRequest::headerExists(const String &str) {
-    return argExists(str);
 }
 
 /*
