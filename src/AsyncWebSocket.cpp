@@ -18,17 +18,16 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#include "Arduino.h"
-#include "AsyncWebSocket.h"
-
-#include <libb64/cencode.h>
-
+#include "Arduino_compat.h"
 #ifdef HAVE_KFC_FIRMWARE_VERSION
 #include <debug_helper.h>
 #else
 #define __DBG_printf(...)
 #define __DBG_panic(...)
 #endif
+#include "AsyncWebSocket.h"
+
+#include <libb64/cencode.h>
 
 
 #ifndef ESP8266

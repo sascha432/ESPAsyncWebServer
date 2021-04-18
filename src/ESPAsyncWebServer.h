@@ -24,7 +24,6 @@
 #include "Arduino.h"
 
 #include <functional>
-#include "FS.h"
 
 #include "StringArray.h"
 
