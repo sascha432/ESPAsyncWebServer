@@ -637,6 +637,10 @@ AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(int code, const Str
   return new AsyncBasicResponse(code, contentType, content);
 }
 
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(int code, const String &contentType, String &&content){
+  return new AsyncBasicResponse(code, contentType, std::move(content));
+}
+
 AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(FS &fs, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback){
   if(fs.exists(path) || (!download && fs.exists(path + F(".gz"))))
     return new AsyncFileResponse(fs, path, contentType, download, callback);

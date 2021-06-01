@@ -22,6 +22,8 @@
 #include "WebResponseImpl.h"
 #include "cbuf.h"
 
+const char _contentTypeTextPlain[] PROGMEM = { "text/plain" };
+
 // Since ESP8266 does not link memchr by default, here's its implementation.
 void* memchr(void* ptr, int ch, size_t count)
 {
@@ -86,13 +88,13 @@ const __FlashStringHelper *AsyncWebServerResponse::responseCodeToString(int code
   }
 }
 
-AsyncWebServerResponse::AsyncWebServerResponse()
-  : _code(0)
+AsyncWebServerResponse::AsyncWebServerResponse(int code, const String &contentType, size_t contentLength, bool chunked, bool closeConnectionHeader)
+  : _code(code)
   , _headers(LinkedList<AsyncWebHeader *>([](AsyncWebHeader *h){ delete h; }))
-  , _contentType()
-  , _contentLength(0)
-  , _sendContentLength(true)
-  , _chunked(false)
+  , _contentType(contentType)
+  , _contentLength(contentLength)
+  , _sendContentLength(!chunked)
+  , _chunked(chunked)
   , _headLength(0)
   , _sentLength(0)
   , _ackedLength(0)
@@ -101,6 +103,9 @@ AsyncWebServerResponse::AsyncWebServerResponse()
 {
   for(auto header: DefaultHeaders::Instance()) {
     _headers.add(new AsyncWebHeader(header->name(), header->value()));
+  }
+  if (closeConnectionHeader) {
+    addHeader(F("Connection"), F("close"));
   }
 }
 
@@ -170,16 +175,22 @@ size_t AsyncWebServerResponse::_ack(AsyncWebServerRequest *request, size_t len, 
 /*
  * String/Code Response
  * */
-AsyncBasicResponse::AsyncBasicResponse(int code, const String& contentType, const String& content){
-  _code = code;
-  _content = content;
-  _contentType = contentType;
-  if(_content.length()){
-    _contentLength = _content.length();
-    if(!_contentType.length())
-      _contentType = F("text/plain");
+AsyncBasicResponse::AsyncBasicResponse(int code, const String& contentType, const String& content) :
+  AsyncWebServerResponse(code, contentType, content.length(), false, true),
+  _content(content)
+{
+  if (!_contentType.length()) {
+    _contentType = FPSTR(_contentTypeTextPlain);
   }
-  addHeader(F("Connection"), F("close"));
+}
+
+AsyncBasicResponse::AsyncBasicResponse(int code, const String& contentType, String &&content) :
+  AsyncWebServerResponse(code, contentType, content.length(), false, true),
+  _content(std::move(content))
+{
+  if (!_contentType.length()) {
+    _contentType = FPSTR(_contentTypeTextPlain);
+  }
 }
 
 void AsyncBasicResponse::_respond(AsyncWebServerRequest *request){

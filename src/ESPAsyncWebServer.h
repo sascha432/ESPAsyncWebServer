@@ -45,6 +45,12 @@
 
 #define DEBUGF(...) //Serial.printf(__VA_ARGS__)
 
+extern "C" const char _contentTypeTextPlain[] PROGMEM;
+
+#ifndef FPSTR
+#define FPSTR(str) reinterpret_cast<const __FlashStringHelper *>(str)
+#endif
+
 class AsyncWebServer;
 class AsyncWebServerRequest;
 class AsyncWebServerResponse;
@@ -257,6 +263,7 @@ class AsyncWebServerRequest {
     void send_P(int code, const String& contentType, PGM_P content, AwsTemplateProcessor callback=nullptr);
 
     AsyncWebServerResponse *beginResponse(int code, const String& contentType=String(), const String& content=String());
+    AsyncWebServerResponse *beginResponse(int code, const String &contentType, String &&content);
     AsyncWebServerResponse *beginResponse(FS &fs, const String& path, const String& contentType=String(), bool download=false, AwsTemplateProcessor callback=nullptr);
     AsyncWebServerResponse *beginResponse(File content, const String& path, const String& contentType=String(), bool download=false, AwsTemplateProcessor callback=nullptr);
     AsyncWebServerResponse *beginResponse(Stream &stream, const String& contentType, size_t len, AwsTemplateProcessor callback=nullptr);
@@ -600,7 +607,7 @@ public:
     static const __FlashStringHelper *responseCodeToString(int code);
 
   public:
-    AsyncWebServerResponse();
+    AsyncWebServerResponse(int code = 0, const String &_contentType = String(), size_t contentLength = 0, bool chunked = false, bool closeConnectionHeader = false);
     virtual ~AsyncWebServerResponse();
     virtual void setCode(int code);
     virtual void setContentLength(size_t len);
