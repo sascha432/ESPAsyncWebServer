@@ -137,7 +137,16 @@ class AsyncWebHeader {
     ~AsyncWebHeader(){}
     const String& name() const { return _name; }
     const String& value() const { return _value; }
-    String toString() const { return String(_name + F(": ") + _value + F("\r\n")); }
+    String toString() const {
+      auto tmp = String();
+      tmp.reserve(_name.length() + _value.length() + 4);
+      tmp += _name;
+      tmp += F(": ");
+      tmp += _value;
+      tmp += F("\r\n");
+      return tmp;
+      // return String(_name + F(": ") + _value + F("\r\n"));
+    }
 };
 
 /*
@@ -249,6 +258,7 @@ class AsyncWebServerRequest {
 
     void setHandler(AsyncWebHandler *handler){ _handler = handler; }
     void addInterestingHeader(const String& name);
+    void addInterestingHeader(const  __FlashStringHelper *name);
 
     void redirect(const String& url);
 

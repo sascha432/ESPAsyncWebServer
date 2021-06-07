@@ -189,6 +189,15 @@ public:
     }
     return false;
   }
+
+  bool containsIgnoreCase(const __FlashStringHelper *str){
+    for (const auto& s : *this) {
+      if (s.equalsIgnoreCase(str)) {
+        return true;
+      }
+    }
+    return false;
+  }
 };
 
 

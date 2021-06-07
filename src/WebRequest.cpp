@@ -615,6 +615,11 @@ void AsyncWebServerRequest::addInterestingHeader(const String &name){
     _interestingHeaders.add(name);
 }
 
+void AsyncWebServerRequest::addInterestingHeader(const __FlashStringHelper *name){
+  if(!_interestingHeaders.containsIgnoreCase(name))
+    _interestingHeaders.add(name);
+}
+
 void AsyncWebServerRequest::send(AsyncWebServerResponse *response){
   _response = response;
   if(_response == NULL){
