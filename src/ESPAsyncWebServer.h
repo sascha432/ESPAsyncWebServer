@@ -615,6 +615,15 @@ class AsyncWebServerResponse {
     const char* _responseCodeToString(int code);
 public:
     static const __FlashStringHelper *responseCodeToString(int code);
+    int getCode() const {
+        return _code;
+    }
+    size_t getContentLength() const {
+        return _contentLength;
+    }
+    const String &getContentType() const {
+        return _contentType;
+    }
 
   public:
     AsyncWebServerResponse(int code = 0, const String &_contentType = String(), size_t contentLength = 0, bool chunked = false, bool closeConnectionHeader = false);
