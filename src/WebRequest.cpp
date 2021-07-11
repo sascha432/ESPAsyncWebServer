@@ -75,7 +75,8 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   c->onPoll([](void *r, AsyncClient *c){ (void)c; AsyncWebServerRequest *req = ( AsyncWebServerRequest*)r; req->_onPoll(); }, this);
 }
 
-AsyncWebServerRequest::~AsyncWebServerRequest(){
+AsyncWebServerRequest::~AsyncWebServerRequest()
+{
   _headers.free();
 
   _params.free();
@@ -83,122 +84,144 @@ AsyncWebServerRequest::~AsyncWebServerRequest(){
 
   _interestingHeaders.free();
 
-  if(_response != NULL){
+  if (_response != NULL) {
     delete _response;
   }
 
-  if(_tempObject != NULL){
+  if (_tempObject != NULL) {
     free(_tempObject);
   }
 
   // redundant code, File objects are closed when destroyed
-//   if(_tempFile){
-//     _tempFile.close();
-//   }
+  //   if(_tempFile){
+  //     _tempFile.close();
+  //   }
 }
 
-void AsyncWebServerRequest::_onData(void *buf, size_t len){
+void AsyncWebServerRequest::_onData(void *buf, size_t len)
+{
   size_t i = 0;
   while (true) {
 
-  if(_parseState < PARSE_REQ_BODY){
-    // Find new line in buf
-    char *str = (char*)buf;
-    for (i = 0; i < len; i++) {
-      if (str[i] == '\n') {
-        break;
-      }
-    }
-    if (i == len) { // No new line, just add the buffer in _temp
-      char ch = str[len-1];
-      str[len-1] = 0;
-      _temp.reserve(_temp.length()+len);
-      _temp.concat(str);
-      _temp.concat(ch);
-    } else { // Found new line - extract it and parse
-      str[i] = 0; // Terminate the string at the end of the line.
-      _temp.concat(str);
-      _temp.trim();
-      _parseLine();
-      if (++i < len) {
-        // Still have more buffer to process
-        buf = str+i;
-        len-= i;
-        continue;
-      }
-    }
-  } else if(_parseState == PARSE_REQ_BODY){
-    // A handler should be already attached at this point in _parseLine function.
-    // If handler does nothing (_onRequest is NULL), we don't need to really parse the body.
-    const bool needParse = _handler && !_handler->isRequestHandlerTrivial();
-    if(_isMultipart){
-      if(needParse){
-        size_t i;
-        for(i=0; i<len; i++){
-          _parseMultipartPostByte(((uint8_t*)buf)[i], i == len - 1);
-          _parsedLength++;
+    if (_parseState < PARSE_REQ_BODY) {
+      // Find new line in buf
+      char *str = (char *)buf;
+      for (i = 0; i < len; i++) {
+        if (str[i] == '\n') {
+          break;
         }
-      } else
-          _parsedLength += len;
-    } else {
-      if(_parsedLength == 0){
-        if(_contentType.startsWith(F("application/x-www-form-urlencoded"))){
-          _isPlainPost = true;
-        } else if(_contentType == F("text/plain") && __is_param_char(((char*)buf)[0])){
-          size_t i = 0;
-          while (i<len && __is_param_char(((char*)buf)[i++]));
-          if(i < len && ((char*)buf)[i-1] == '='){
-            _isPlainPost = true;
+      }
+      if (i == len) { // No new line, just add the buffer in _temp
+        char ch = str[len - 1];
+        str[len - 1] = 0;
+        _temp.reserve(_temp.length() + len);
+        _temp.concat(str);
+        _temp.concat(ch);
+      }
+      else { // Found new line - extract it and parse
+        str[i] = 0; // Terminate the string at the end of the line.
+        _temp.concat(str);
+        _temp.trim();
+        _parseLine();
+        if (++i < len) {
+          // Still have more buffer to process
+          buf = str + i;
+          len -= i;
+          continue;
+        }
+      }
+    }
+    else if (_parseState == PARSE_REQ_BODY) {
+      // A handler should be already attached at this point in _parseLine function.
+      // If handler does nothing (_onRequest is NULL), we don't need to really parse the body.
+      const bool needParse = _handler && !_handler->isRequestHandlerTrivial();
+      if (_isMultipart) {
+        if (needParse) {
+          size_t i;
+          for (i = 0; i < len; i++) {
+            _parseMultipartPostByte(((uint8_t *)buf)[i], i == len - 1);
+            _parsedLength++;
           }
         }
-      }
-      if(!_isPlainPost) {
-        //check if authenticated before calling the body
-        if(_handler) _handler->handleBody(this, (uint8_t*)buf, len, _parsedLength, _contentLength);
-        _parsedLength += len;
-      } else if(needParse) {
-        size_t i;
-        for(i=0; i<len; i++){
-          _parsedLength++;
-          _parsePlainPostChar(((uint8_t*)buf)[i]);
+        else {
+          _parsedLength += len;
         }
-      } else {
-        _parsedLength += len;
+      }
+      else {
+        if (_parsedLength == 0) {
+          if (_contentType.startsWith(F("application/x-www-form-urlencoded"))) {
+            _isPlainPost = true;
+          }
+          else if (_contentType == F("text/plain") && __is_param_char(((char *)buf)[0])) {
+            size_t i = 0;
+            while (i < len && __is_param_char(((char *)buf)[i++])) {
+            }
+            if (i < len && ((char *)buf)[i - 1] == '=') {
+              _isPlainPost = true;
+            }
+          }
+        }
+        if (!_isPlainPost) {
+          //check if authenticated before calling the body
+          if (_handler) {
+            _handler->handleBody(this, (uint8_t *)buf, len, _parsedLength, _contentLength);
+          }
+          _parsedLength += len;
+        }
+        else if (needParse) {
+          size_t i;
+          for (i = 0; i < len; i++) {
+            _parsedLength++;
+            _parsePlainPostChar(((uint8_t *)buf)[i]);
+          }
+        }
+        else {
+          _parsedLength += len;
+        }
+      }
+      if (_parsedLength == _contentLength) {
+        _parseState = PARSE_REQ_END;
+        //check if authenticated before calling handleRequest and request auth instead
+        if (_handler) {
+          _handler->handleRequest(this);
+        }
+        else {
+          send(501);
+        }
       }
     }
-    if(_parsedLength == _contentLength){
-      _parseState = PARSE_REQ_END;
-      //check if authenticated before calling handleRequest and request auth instead
-      if(_handler) _handler->handleRequest(this);
-      else send(501);
-    }
-  }
-  break;
+    break;
   }
 }
 
-void AsyncWebServerRequest::_removeNotInterestingHeaders(){
-  if (_interestingHeaders.containsIgnoreCase(F("ANY"))) return; // nothing to do
-  for(const auto &header: _headers){
-      if(!_interestingHeaders.containsIgnoreCase(header->name().c_str())){
-        _headers.remove(header);
-      }
+void AsyncWebServerRequest::_removeNotInterestingHeaders()
+{
+  if (_interestingHeaders.containsIgnoreCase(F("ANY"))) {
+    return; // nothing to do
+  }
+  for (const auto &header : _headers) {
+    if (!_interestingHeaders.containsIgnoreCase(header->name().c_str())) {
+      _headers.remove(header);
+    }
   }
 }
 
-void AsyncWebServerRequest::_onPoll(){
+void AsyncWebServerRequest::_onPoll()
+{
   //os_printf("p\n");
-  if(_response != NULL && _client != NULL && _client->canSend() && !_response->_finished()){
+  if (_response != NULL && _client != NULL && _client->canSend() && !_response->_finished()) {
     _response->_ack(this, 0, 0);
   }
 }
 
-void AsyncWebServerRequest::_onAck(size_t len, uint32_t time){
+void AsyncWebServerRequest::_onAck(size_t len, uint32_t time)
+{
   //os_printf("a:%u:%u\n", len, time);
-  if(_response != NULL){
-    if(!_response->_finished()){
+  if (_response != NULL) {
+    if (!_response->_finished()) {
       _response->_ack(this, len, time);
-    } else {
+    }
+    else {
       AsyncWebServerResponse *r = _response;
       _response = NULL;
       delete r;
@@ -206,43 +229,54 @@ void AsyncWebServerRequest::_onAck(size_t len, uint32_t time){
   }
 }
 
-void AsyncWebServerRequest::_onError(int8_t error){
+void AsyncWebServerRequest::_onError(int8_t error)
+{
   (void)error;
 }
 
-void AsyncWebServerRequest::_onTimeout(uint32_t time){
+void AsyncWebServerRequest::_onTimeout(uint32_t time)
+{
   (void)time;
   //os_printf("TIMEOUT: %u, state: %s\n", time, _client->stateToString());
   _client->close();
 }
 
-void AsyncWebServerRequest::onDisconnect (ArDisconnectHandler fn){
-    _onDisconnectfn=fn;
+void AsyncWebServerRequest::onDisconnect(ArDisconnectHandler fn)
+{
+  _onDisconnectfn = fn;
 }
 
-void AsyncWebServerRequest::_onDisconnect(){
+void AsyncWebServerRequest::_onDisconnect()
+{
   //os_printf("d\n");
-  if(_onDisconnectfn) {
-      _onDisconnectfn();
-    }
+  if (_onDisconnectfn) {
+    _onDisconnectfn();
+  }
   _server->_handleDisconnect(this);
 }
 
-void AsyncWebServerRequest::_addParam(AsyncWebParameter *p){
+void AsyncWebServerRequest::_addParam(AsyncWebParameter *p)
+{
   _params.add(p);
 }
 
-void AsyncWebServerRequest::_addPathParam(const char *p){
+void AsyncWebServerRequest::_addPathParam(const char *p)
+{
   _pathParams.add(new String(p));
 }
 
-void AsyncWebServerRequest::_addGetParams(const String &params){
+void AsyncWebServerRequest::_addGetParams(const String &params)
+{
   size_t start = 0;
-  while (start < params.length()){
+  while (start < params.length()) {
     int end = params.indexOf('&', start);
-    if (end < 0) end = params.length();
+    if (end < 0) {
+      end = params.length();
+    }
     int equal = params.indexOf('=', start);
-    if (equal < 0 || equal > end) equal = end;
+    if (equal < 0 || equal > end) {
+      equal = end;
+    }
     String name = params.substring(start, equal);
     String value = equal + 1 < end ? params.substring(equal + 1, end) : String();
     _addParam(new AsyncWebParameter(urlDecode(name), urlDecode(value)));
@@ -250,98 +284,87 @@ void AsyncWebServerRequest::_addGetParams(const String &params){
   }
 }
 
-bool AsyncWebServerRequest::_parseReqHead(){
+bool AsyncWebServerRequest::_parseReqHead()
+{
   // Split the head into method, url and version
   int index = _temp.indexOf(' ');
   String m = _temp.substring(0, index);
-  index = _temp.indexOf(' ', index+1);
-  String u = _temp.substring(m.length()+1, index);
-  _temp = _temp.substring(index+1);
+  index = _temp.indexOf(' ', index + 1);
+  String u = _temp.substring(m.length() + 1, index);
+  _temp = _temp.substring(index + 1);
 
-  if(m == F("GET")){
+  if (m == F("GET")) {
     _method = HTTP_GET;
-  } else if(m == F("POST")){
+  } else if (m == F("POST")) {
     _method = HTTP_POST;
-  } else if(m == F("DELETE")){
+  } else if (m == F("DELETE")) {
     _method = HTTP_DELETE;
-  } else if(m == F("PUT")){
+  } else if (m == F("PUT")) {
     _method = HTTP_PUT;
-  } else if(m == F("PATCH")){
+  } else if (m == F("PATCH")) {
     _method = HTTP_PATCH;
-  } else if(m == F("HEAD")){
+  } else if (m == F("HEAD")) {
     _method = HTTP_HEAD;
-  } else if(m == F("OPTIONS")){
+  } else if (m == F("OPTIONS")) {
     _method = HTTP_OPTIONS;
   }
 
   String g;
   index = u.indexOf('?');
-  if(index > 0){
-    g = u.substring(index +1);
+  if (index > 0) {
+    g = u.substring(index + 1);
     u = u.substring(0, index);
   }
   _url = urlDecode(u);
   _addGetParams(g);
 
-  if(!_temp.startsWith(F("HTTP/1.0")))
+  if (!_temp.startsWith(F("HTTP/1.0"))) {
     _version = 1;
+  }
 
   _temp = String();
   return true;
 }
 
-bool strContains(const String &src, const String &find, bool mindcase = true) {
-  int pos=0, i=0;
-  const int slen = src.length();
-  const int flen = find.length();
-
-  if (slen < flen) return false;
-  while (pos <= (slen - flen)) {
-    for (i=0; i < flen; i++) {
-      if (mindcase) {
-        if (src[pos+i] != find[i]) i = flen + 1; // no match
-      }
-      else if (tolower(src[pos+i]) != tolower(find[i])) {
-        i = flen + 1; // no match
-      }
-    }
-    if (i == flen) return true;
-    pos++;
-  }
-  return false;
-}
-
-bool AsyncWebServerRequest::_parseReqHeader(){
+bool AsyncWebServerRequest::_parseReqHeader()
+{
   int index = _temp.indexOf(':');
-  if(index){
+  if (index) {
     String name = _temp.substring(0, index);
     String value = _temp.substring(index + 2);
-    if(name.equalsIgnoreCase(F("Host"))){
+    if (name.equalsIgnoreCase(F("Host"))) {
       _host = value;
-    } else if(name.equalsIgnoreCase(F("Content-Type"))){
-	    _contentType = value.substring(0, value.indexOf(';'));
-      if (value.startsWith(F("multipart/"))){
-        _boundary = value.substring(value.indexOf('=')+1);
+    }
+    else if (name.equalsIgnoreCase(F("Content-Type"))) {
+      _contentType = value.substring(0, value.indexOf(';'));
+      if (value.startsWith(F("multipart/"))) {
+        _boundary = value.substring(value.indexOf('=') + 1);
         _boundary.replace(String('"'), String());
         _isMultipart = true;
       }
-    } else if(name.equalsIgnoreCase(F("Content-Length"))){
+    }
+    else if (name.equalsIgnoreCase(F("Content-Length"))) {
       _contentLength = atoi(value.c_str());
-    } else if(name.equalsIgnoreCase(F("Expect")) && value == F("100-continue")){
+    }
+    else if (name.equalsIgnoreCase(F("Expect")) && value == F("100-continue")) {
       _expectingContinue = true;
-    } else if(name.equalsIgnoreCase(F("Authorization"))){
-      if(value.length() > 5 && value.substring(0,5).equalsIgnoreCase(F("Basic"))){
+    }
+    else if (name.equalsIgnoreCase(F("Authorization"))) {
+      if (value.startsWithIgnoreCase(F("Basic"))) {
         _authorization = value.substring(6);
-      } else if(value.length() > 6 && value.substring(0,6).equalsIgnoreCase(F("Digest"))){
+      }
+      else if (value.startsWithIgnoreCase(F("Digest"))) {
         _isDigest = true;
         _authorization = value.substring(7);
       }
-    } else {
-      if(name.equalsIgnoreCase(F("Upgrade")) && value.equalsIgnoreCase(F("websocket"))){
+    }
+    else {
+      if (name.equalsIgnoreCase(F("Upgrade")) && value.equalsIgnoreCase(F("websocket"))) {
         // WebSocket request can be uniquely identified by header: [Upgrade: websocket]
         _reqconntype = RCT_WS;
-      } else {
-        if(name.equalsIgnoreCase(F("Accept")) && strContains(value, F("text/event-stream"), false)){
+      }
+      else {
+        if (name.equalsIgnoreCase(F("Accept")) && value.indexOfIgnoreCase(F("text/event-stream")) != -1) {
           // WebEvent request can be uniquely identified by header:  [Accept: text/event-stream]
           _reqconntype = RCT_EVENT;
         }
@@ -353,14 +376,16 @@ bool AsyncWebServerRequest::_parseReqHeader(){
   return true;
 }
 
-void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data){
-  if(data && (char)data != '&')
+void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data)
+{
+  if (data && (char)data != '&') {
     _temp += (char)data;
-  if(!data || (char)data == '&' || _parsedLength == _contentLength){
+  }
+  if (!data || (char)data == '&' || _parsedLength == _contentLength) {
     String name;
     String value;
     int pos;
-    if(_temp.charAt(0) != '{' && _temp.charAt(0) != '[' && ((pos = _temp.indexOf('=')) > 0)){
+    if (_temp.charAt(0) != '{' && _temp.charAt(0) != '[' && ((pos = _temp.indexOf('=')) > 0)) {
       name = _temp.substring(0, pos);
       value = _temp.substring(pos + 1);
     }
@@ -373,13 +398,15 @@ void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data){
   }
 }
 
-void AsyncWebServerRequest::_handleUploadByte(uint8_t data, bool last){
+void AsyncWebServerRequest::_handleUploadByte(uint8_t data, bool last)
+{
   _itemBuffer[_itemBufferIndex++] = data;
 
-  if(last || _itemBufferIndex == 1460){
+  if (last || _itemBufferIndex == 1460) {
     //check if authenticated before calling the upload
-    if(_handler)
+    if (_handler) {
       _handler->handleUpload(this, _itemFilename, _itemSize - _itemBufferIndex, _itemBuffer, _itemBufferIndex, false);
+    }
     _itemBufferIndex = 0;
   }
 }
@@ -398,10 +425,18 @@ enum {
   PARSE_ERROR
 };
 
-void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last){
-#define itemWriteByte(b) do { _itemSize++; if(_itemIsFile) _handleUploadByte(b, last); else _itemValue+=(char)(b); } while(0)
+void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last)
+{
+#define itemWriteByte(b)          \
+  do {                            \
+    _itemSize++;                  \
+    if (_itemIsFile)              \
+      _handleUploadByte(b, last); \
+    else                          \
+      _itemValue += (char)(b);    \
+  } while (0)
 
-  if(!_parsedLength){
+  if (!_parsedLength) {
     _multiParseState = EXPECT_BOUNDARY;
     _temp = String();
     _itemName = String();
@@ -409,46 +444,46 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last){
     _itemType = String();
   }
 
-  if(_multiParseState == WAIT_FOR_RETURN1){
-    if(data != '\r'){
+  if (_multiParseState == WAIT_FOR_RETURN1) {
+    if (data != '\r') {
       itemWriteByte(data);
     } else {
       _multiParseState = EXPECT_FEED1;
     }
-  } else if(_multiParseState == EXPECT_BOUNDARY){
-    if(_parsedLength < 2 && data != '-'){
+  } else if (_multiParseState == EXPECT_BOUNDARY) {
+    if (_parsedLength < 2 && data != '-') {
       _multiParseState = PARSE_ERROR;
       return;
-    } else if(_parsedLength - 2 < _boundary.length() && _boundary.c_str()[_parsedLength - 2] != data){
+    } else if (_parsedLength - 2 < _boundary.length() && _boundary.c_str()[_parsedLength - 2] != data) {
       _multiParseState = PARSE_ERROR;
       return;
-    } else if(_parsedLength - 2 == _boundary.length() && data != '\r'){
+    } else if (_parsedLength - 2 == _boundary.length() && data != '\r') {
       _multiParseState = PARSE_ERROR;
       return;
-    } else if(_parsedLength - 3 == _boundary.length()){
-      if(data != '\n'){
+    } else if (_parsedLength - 3 == _boundary.length()) {
+      if (data != '\n') {
         _multiParseState = PARSE_ERROR;
         return;
       }
       _multiParseState = PARSE_HEADERS;
       _itemIsFile = false;
     }
-  } else if(_multiParseState == PARSE_HEADERS){
-    if((char)data != '\r' && (char)data != '\n')
-       _temp += (char)data;
-    if((char)data == '\n'){
-      if(_temp.length()){
-        if(_temp.length() > 12 && _temp.substring(0, 12).equalsIgnoreCase(F("Content-Type"))){
+  } else if (_multiParseState == PARSE_HEADERS) {
+    if ((char)data != '\r' && (char)data != '\n')
+      _temp += (char)data;
+    if ((char)data == '\n') {
+      if (_temp.length()) {
+        if (_temp.startsWithIgnoreCase(F("Content-Type"))) {
           _itemType = _temp.substring(14);
           _itemIsFile = true;
-        } else if(_temp.length() > 19 && _temp.substring(0, 19).equalsIgnoreCase(F("Content-Disposition"))){
+        } else if (_temp.startsWithIgnoreCase(F("Content-Disposition"))) {
           _temp = _temp.substring(_temp.indexOf(';') + 2);
-          while(_temp.indexOf(';') > 0){
+          while (_temp.indexOf(';') > 0) {
             String name = _temp.substring(0, _temp.indexOf('='));
             String nameVal = _temp.substring(_temp.indexOf('=') + 2, _temp.indexOf(';') - 1);
-            if(name == F("name")){
+            if (name == F("name")) {
               _itemName = nameVal;
-            } else if(name == F("filename")){
+            } else if (name == F("filename")) {
               _itemFilename = nameVal;
               _itemIsFile = true;
             }
@@ -456,9 +491,9 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last){
           }
           String name = _temp.substring(0, _temp.indexOf('='));
           String nameVal = _temp.substring(_temp.indexOf('=') + 2, _temp.length() - 1);
-          if(name == F("name")){
+          if (name == F("name")) {
             _itemName = nameVal;
-          } else if(name == F("filename")){
+          } else if (name == F("filename")) {
             _itemFilename = nameVal;
             _itemIsFile = true;
           }
@@ -470,11 +505,11 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last){
         _itemSize = 0;
         _itemStartIndex = _parsedLength;
         _itemValue = String();
-        if(_itemIsFile){
-          if(_itemBuffer)
+        if (_itemIsFile) {
+          if (_itemBuffer)
             free(_itemBuffer);
-          _itemBuffer = (uint8_t*)malloc(1460);
-          if(_itemBuffer == NULL){
+          _itemBuffer = (uint8_t *)malloc(1460);
+          if (_itemBuffer == NULL) {
             _multiParseState = PARSE_ERROR;
             return;
           }
@@ -482,44 +517,54 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last){
         }
       }
     }
-  } else if(_multiParseState == EXPECT_FEED1){
-    if(data != '\n'){
+  } else if (_multiParseState == EXPECT_FEED1) {
+    if (data != '\n') {
       _multiParseState = WAIT_FOR_RETURN1;
-      itemWriteByte('\r'); _parseMultipartPostByte(data, last);
+      itemWriteByte('\r');
+      _parseMultipartPostByte(data, last);
     } else {
       _multiParseState = EXPECT_DASH1;
     }
-  } else if(_multiParseState == EXPECT_DASH1){
-    if(data != '-'){
+  } else if (_multiParseState == EXPECT_DASH1) {
+    if (data != '-') {
       _multiParseState = WAIT_FOR_RETURN1;
-      itemWriteByte('\r'); itemWriteByte('\n');  _parseMultipartPostByte(data, last);
+      itemWriteByte('\r');
+      itemWriteByte('\n');
+      _parseMultipartPostByte(data, last);
     } else {
       _multiParseState = EXPECT_DASH2;
     }
-  } else if(_multiParseState == EXPECT_DASH2){
-    if(data != '-'){
+  } else if (_multiParseState == EXPECT_DASH2) {
+    if (data != '-') {
       _multiParseState = WAIT_FOR_RETURN1;
-      itemWriteByte('\r'); itemWriteByte('\n'); itemWriteByte('-');  _parseMultipartPostByte(data, last);
+      itemWriteByte('\r');
+      itemWriteByte('\n');
+      itemWriteByte('-');
+      _parseMultipartPostByte(data, last);
     } else {
       _multiParseState = BOUNDARY_OR_DATA;
       _boundaryPosition = 0;
     }
-  } else if(_multiParseState == BOUNDARY_OR_DATA){
-    if(_boundaryPosition < _boundary.length() && _boundary.c_str()[_boundaryPosition] != data){
+  } else if (_multiParseState == BOUNDARY_OR_DATA) {
+    if (_boundaryPosition < _boundary.length() && _boundary.c_str()[_boundaryPosition] != data) {
       _multiParseState = WAIT_FOR_RETURN1;
-      itemWriteByte('\r'); itemWriteByte('\n'); itemWriteByte('-');  itemWriteByte('-');
+      itemWriteByte('\r');
+      itemWriteByte('\n');
+      itemWriteByte('-');
+      itemWriteByte('-');
       uint8_t i;
-      for(i=0; i<_boundaryPosition; i++)
+      for (i = 0; i < _boundaryPosition; i++)
         itemWriteByte(_boundary.c_str()[i]);
       _parseMultipartPostByte(data, last);
-    } else if(_boundaryPosition == _boundary.length() - 1){
+    } else if (_boundaryPosition == _boundary.length() - 1) {
       _multiParseState = DASH3_OR_RETURN2;
-      if(!_itemIsFile){
+      if (!_itemIsFile) {
         _addParam(new AsyncWebParameter(_itemName, _itemValue, true));
       } else {
-        if(_itemSize){
+        if (_itemSize) {
           //check if authenticated before calling the upload
-          if(_handler) _handler->handleUpload(this, _itemFilename, _itemSize - _itemBufferIndex, _itemBuffer, _itemBufferIndex, true);
+          if (_handler)
+            _handler->handleUpload(this, _itemFilename, _itemSize - _itemBufferIndex, _itemBuffer, _itemBufferIndex, true);
           _itemBufferIndex = 0;
           _addParam(new AsyncWebParameter(_itemName, _itemFilename, true, true, _itemSize));
         }
@@ -530,104 +575,132 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last){
     } else {
       _boundaryPosition++;
     }
-  } else if(_multiParseState == DASH3_OR_RETURN2){
-    if(data == '-' && (_contentLength - _parsedLength - 4) != 0){
+  } else if (_multiParseState == DASH3_OR_RETURN2) {
+    if (data == '-' && (_contentLength - _parsedLength - 4) != 0) {
       //os_printf("ERROR: The parser got to the end of the POST but is expecting %u bytes more!\nDrop an issue so we can have more info on the matter!\n", _contentLength - _parsedLength - 4);
-      _contentLength = _parsedLength + 4;//lets close the request gracefully
+      _contentLength = _parsedLength + 4; //lets close the request gracefully
     }
-    if(data == '\r'){
+    if (data == '\r') {
       _multiParseState = EXPECT_FEED2;
-    } else if(data == '-' && _contentLength == (_parsedLength + 4)){
+    } else if (data == '-' && _contentLength == (_parsedLength + 4)) {
       _multiParseState = PARSING_FINISHED;
     } else {
       _multiParseState = WAIT_FOR_RETURN1;
-      itemWriteByte('\r'); itemWriteByte('\n'); itemWriteByte('-');  itemWriteByte('-');
-      uint8_t i; for(i=0; i<_boundary.length(); i++) itemWriteByte(_boundary.c_str()[i]);
+      itemWriteByte('\r');
+      itemWriteByte('\n');
+      itemWriteByte('-');
+      itemWriteByte('-');
+      uint8_t i;
+      for (i = 0; i < _boundary.length(); i++)
+        itemWriteByte(_boundary.c_str()[i]);
       _parseMultipartPostByte(data, last);
     }
-  } else if(_multiParseState == EXPECT_FEED2){
-    if(data == '\n'){
+  } else if (_multiParseState == EXPECT_FEED2) {
+    if (data == '\n') {
       _multiParseState = PARSE_HEADERS;
       _itemIsFile = false;
     } else {
       _multiParseState = WAIT_FOR_RETURN1;
-      itemWriteByte('\r'); itemWriteByte('\n'); itemWriteByte('-');  itemWriteByte('-');
-      uint8_t i; for(i=0; i<_boundary.length(); i++) itemWriteByte(_boundary.c_str()[i]);
-      itemWriteByte('\r'); _parseMultipartPostByte(data, last);
+      itemWriteByte('\r');
+      itemWriteByte('\n');
+      itemWriteByte('-');
+      itemWriteByte('-');
+      uint8_t i;
+      for (i = 0; i < _boundary.length(); i++)
+        itemWriteByte(_boundary.c_str()[i]);
+      itemWriteByte('\r');
+      _parseMultipartPostByte(data, last);
     }
   }
 }
 
-void AsyncWebServerRequest::_parseLine(){
-  if(_parseState == PARSE_REQ_START){
-    if(!_temp.length()){
+void AsyncWebServerRequest::_parseLine()
+{
+  if (_parseState == PARSE_REQ_START) {
+    if (!_temp.length()) {
       _parseState = PARSE_REQ_FAIL;
       _client->close();
-    } else {
+    }
+    else {
       _parseReqHead();
       _parseState = PARSE_REQ_HEADERS;
     }
     return;
   }
 
-  if(_parseState == PARSE_REQ_HEADERS){
-    if(!_temp.length()){
+  if (_parseState == PARSE_REQ_HEADERS) {
+    if (!_temp.length()) {
       //end of headers
       _server->_rewriteRequest(this);
       _server->_attachHandler(this);
       _removeNotInterestingHeaders();
-      if(_expectingContinue){
+      if (_expectingContinue) {
         String response = F("HTTP/1.1 100 Continue\r\n\r\n");
         _client->write(response.c_str(), response.length());
       }
       //check handler for authentication
-      if(_contentLength){
+      if (_contentLength) {
         _parseState = PARSE_REQ_BODY;
-      } else {
-        _parseState = PARSE_REQ_END;
-        if(_handler) _handler->handleRequest(this);
-        else send(501);
       }
-    } else _parseReqHeader();
+      else {
+        _parseState = PARSE_REQ_END;
+        if (_handler) {
+          _handler->handleRequest(this);
+        }
+        else {
+          send(501);
+        }
+      }
+    }
+    else {
+      _parseReqHeader();
+    }
   }
 }
 
-size_t AsyncWebServerRequest::headers() const{
+size_t AsyncWebServerRequest::headers() const
+{
   return _headers.length();
 }
 
-AsyncWebHeader *AsyncWebServerRequest::getHeader(size_t num) const {
+AsyncWebHeader *AsyncWebServerRequest::getHeader(size_t num) const
+{
   auto header = _headers.nth(num);
   return header ? *header : nullptr;
 }
 
-size_t AsyncWebServerRequest::params() const {
+size_t AsyncWebServerRequest::params() const
+{
   return _params.length();
 }
 
-AsyncWebParameter *AsyncWebServerRequest::getParam(size_t num) const {
+AsyncWebParameter *AsyncWebServerRequest::getParam(size_t num) const
+{
   auto param = _params.nth(num);
   return param ? *param : nullptr;
 }
 
-void AsyncWebServerRequest::addInterestingHeader(const String &name){
-  if(!_interestingHeaders.containsIgnoreCase(name))
+void AsyncWebServerRequest::addInterestingHeader(const String &name)
+{
+  if (!_interestingHeaders.containsIgnoreCase(name))
     _interestingHeaders.add(name);
 }
 
-void AsyncWebServerRequest::addInterestingHeader(const __FlashStringHelper *name){
-  if(!_interestingHeaders.containsIgnoreCase(name))
+void AsyncWebServerRequest::addInterestingHeader(const __FlashStringHelper *name)
+{
+  if (!_interestingHeaders.containsIgnoreCase(name))
     _interestingHeaders.add(name);
 }
 
-void AsyncWebServerRequest::send(AsyncWebServerResponse *response){
+void AsyncWebServerRequest::send(AsyncWebServerResponse *response)
+{
   _response = response;
-  if(_response == NULL){
+  if (_response == NULL) {
     _client->close(true);
     _onDisconnect();
     return;
   }
-  if(!_response->_sourceValid()){
+  if (!_response->_sourceValid()) {
     delete response;
     _response = NULL;
     send(500);
@@ -638,120 +711,156 @@ void AsyncWebServerRequest::send(AsyncWebServerResponse *response){
   }
 }
 
-AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(int code, const String &contentType, const String &content){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(int code, const String &contentType, const String &content)
+{
   return new AsyncBasicResponse(code, contentType, content);
 }
 
-AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(int code, const String &contentType, String &&content){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(int code, const String &contentType, String &&content)
+{
   return new AsyncBasicResponse(code, contentType, std::move(content));
 }
 
-AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(FS &fs, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback){
-  if(fs.exists(path) || (!download && fs.exists(path + F(".gz"))))
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(FS &fs, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback)
+{
+  if (fs.exists(path) || (!download && fs.exists(path + F(".gz")))) {
     return new AsyncFileResponse(fs, path, contentType, download, callback);
-  return NULL;
+  }
+  return nullptr;
 }
 
-AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(File content, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback){
-  if(content == true)
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(File content, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback)
+{
+  if (content == true) {
     return new AsyncFileResponse(content, path, contentType, download, callback);
-  return NULL;
+  }
+  return nullptr;
 }
 
-AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(Stream &stream, const String &contentType, size_t len, AwsTemplateProcessor callback){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(Stream &stream, const String &contentType, size_t len, AwsTemplateProcessor callback)
+{
   return new AsyncStreamResponse(stream, contentType, len, callback);
 }
 
-AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(const String &contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse(const String &contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback)
+{
   return new AsyncCallbackResponse(contentType, len, callback, templateCallback);
 }
 
-AsyncWebServerResponse *AsyncWebServerRequest::beginChunkedResponse(const String &contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
-  if(_version)
+AsyncWebServerResponse *AsyncWebServerRequest::beginChunkedResponse(const String &contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback)
+{
+  if (_version) {
     return new AsyncChunkedResponse(contentType, callback, templateCallback);
+  }
   return new AsyncCallbackResponse(contentType, 0, callback, templateCallback);
 }
 
-AsyncResponseStream *AsyncWebServerRequest::beginResponseStream(const String &contentType, size_t bufferSize){
+AsyncResponseStream *AsyncWebServerRequest::beginResponseStream(const String &contentType, size_t bufferSize)
+{
   return new AsyncResponseStream(contentType, bufferSize);
 }
 
-AsyncWebServerResponse *AsyncWebServerRequest::beginResponse_P(int code, const String &contentType, const uint8_t *content, size_t len, AwsTemplateProcessor callback){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse_P(int code, const String &contentType, const uint8_t *content, size_t len, AwsTemplateProcessor callback)
+{
   return new AsyncProgmemResponse(code, contentType, content, len, callback);
 }
 
-AsyncWebServerResponse *AsyncWebServerRequest::beginResponse_P(int code, const String &contentType, PGM_P content, AwsTemplateProcessor callback){
+AsyncWebServerResponse *AsyncWebServerRequest::beginResponse_P(int code, const String &contentType, PGM_P content, AwsTemplateProcessor callback)
+{
   return beginResponse_P(code, contentType, (const uint8_t *)content, strlen_P(content), callback);
 }
 
-void AsyncWebServerRequest::send(int code, const String &contentType, const String &content){
+void AsyncWebServerRequest::send(int code, const String &contentType, const String &content)
+{
   send(beginResponse(code, contentType, content));
 }
 
-void AsyncWebServerRequest::send(FS &fs, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback){
-  if(fs.exists(path) || (!download && fs.exists(path+F(".gz")))){
+void AsyncWebServerRequest::send(FS &fs, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback)
+{
+  if (fs.exists(path) || (!download && fs.exists(path + F(".gz")))) {
     send(beginResponse(fs, path, contentType, download, callback));
-  } else send(404);
+  }
+  else {
+    send(404);
+  }
 }
 
-void AsyncWebServerRequest::send(File content, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback){
-  if(content == true){
+void AsyncWebServerRequest::send(File content, const String &path, const String &contentType, bool download, AwsTemplateProcessor callback)
+{
+  if (content == true) {
     send(beginResponse(content, path, contentType, download, callback));
-  } else send(404);
+  }
+  else {
+    send(404);
+  }
 }
 
-void AsyncWebServerRequest::send(Stream &stream, const String &contentType, size_t len, AwsTemplateProcessor callback){
+void AsyncWebServerRequest::send(Stream &stream, const String &contentType, size_t len, AwsTemplateProcessor callback)
+{
   send(beginResponse(stream, contentType, len, callback));
 }
 
-void AsyncWebServerRequest::send(const String &contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
+void AsyncWebServerRequest::send(const String &contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback)
+{
   send(beginResponse(contentType, len, callback, templateCallback));
 }
 
-void AsyncWebServerRequest::sendChunked(const String &contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback){
+void AsyncWebServerRequest::sendChunked(const String &contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback)
+{
   send(beginChunkedResponse(contentType, callback, templateCallback));
 }
 
-void AsyncWebServerRequest::send_P(int code, const String &contentType, const uint8_t *content, size_t len, AwsTemplateProcessor callback){
+void AsyncWebServerRequest::send_P(int code, const String &contentType, const uint8_t *content, size_t len, AwsTemplateProcessor callback)
+{
   send(beginResponse_P(code, contentType, content, len, callback));
 }
 
-void AsyncWebServerRequest::send_P(int code, const String &contentType, PGM_P content, AwsTemplateProcessor callback){
+void AsyncWebServerRequest::send_P(int code, const String &contentType, PGM_P content, AwsTemplateProcessor callback)
+{
   send(beginResponse_P(code, contentType, content, callback));
 }
 
-void AsyncWebServerRequest::redirect(const String &url){
+void AsyncWebServerRequest::redirect(const String &url)
+{
   AsyncWebServerResponse *response = beginResponse(302);
   response->addHeader(F("Location"), url);
   send(response);
 }
 
-bool AsyncWebServerRequest::authenticate(const char *username, const char *password, const char *realm, bool passwordIsHash){
-  if(_authorization.length()){
-    if(_isDigest)
+bool AsyncWebServerRequest::authenticate(const char *username, const char *password, const char *realm, bool passwordIsHash)
+{
+  if (_authorization.length()) {
+    if (_isDigest) {
       return checkDigestAuthentication(_authorization.c_str(), methodToString(), username, password, realm, passwordIsHash, NULL, NULL, NULL);
-    else if(!passwordIsHash)
+    }
+    else if (!passwordIsHash) {
       return checkBasicAuthentication(_authorization.c_str(), username, password);
-    else
+    }
+    else {
       return _authorization.equals(password);
+    }
   }
   return false;
 }
 
-bool AsyncWebServerRequest::authenticate(const char *hash){
-  if(!_authorization.length() || hash == NULL)
+bool AsyncWebServerRequest::authenticate(const char *hash)
+{
+  if (!_authorization.length() || !hash) {
     return false;
+  }
 
-  if(_isDigest){
+  if (_isDigest) {
     String hStr = String(hash);
     int separator = hStr.indexOf(':');
-    if(separator <= 0)
+    if (separator <= 0) {
       return false;
+    }
     String username = hStr.substring(0, separator);
     hStr = hStr.substring(separator + 1);
     separator = hStr.indexOf(':');
-    if(separator <= 0)
+    if (separator <= 0) {
       return false;
+    }
     String realm = hStr.substring(0, separator);
     hStr = hStr.substring(separator + 1);
     return checkDigestAuthentication(_authorization.c_str(), methodToString(), username.c_str(), hStr.c_str(), realm.c_str(), true, NULL, NULL, NULL);
@@ -760,16 +869,19 @@ bool AsyncWebServerRequest::authenticate(const char *hash){
   return (_authorization.equals(hash));
 }
 
-void AsyncWebServerRequest::requestAuthentication(const char *realm, bool isDigest){
+void AsyncWebServerRequest::requestAuthentication(const char *realm, bool isDigest)
+{
   AsyncWebServerResponse *r = beginResponse(401);
-  if(!isDigest && realm == NULL){
+  if (!isDigest && realm == NULL) {
     r->addHeader(F("WWW-Authenticate"), F("Basic realm=\"Login Required\""));
-  } else if(!isDigest){
+  }
+  else if (!isDigest) {
     String header = F("Basic realm=\"");
     header.concat(realm);
     header += '"';
     r->addHeader(F("WWW-Authenticate"), header);
-  } else {
+  }
+  else {
     String header = F("Digest ");
     header.concat(requestDigestAuthentication(realm));
     r->addHeader(F("WWW-Authenticate"), header);
