@@ -37,6 +37,13 @@
 #error Platform not supported
 #endif
 
+#if ESP8266
+#include <interrupts.h>
+using InterruptLock = esp8266::InterruptLock;
+#else
+struct InterruptLock {};
+#endif
+
 #ifdef ASYNCWEBSERVER_REGEX
 #define ASYNCWEBSERVER_REGEX_ATTRIBUTE
 #else
@@ -639,6 +646,8 @@ public:
     virtual bool _sourceValid() const;
     virtual void _respond(AsyncWebServerRequest *request);
     virtual size_t _ack(AsyncWebServerRequest *request, size_t len, uint32_t time);
+
+    static uint32_t _responseCounter;
 };
 
 /*
@@ -691,6 +700,11 @@ class AsyncWebServer {
     void _handleDisconnect(AsyncWebServerRequest *request);
     void _attachHandler(AsyncWebServerRequest *request);
     void _rewriteRequest(AsyncWebServerRequest *request);
+
+public:
+    static volatile uint16_t _responseCounter;
+    static volatile uint16_t _requestCounter;
+
 };
 
 class DefaultHeaders {

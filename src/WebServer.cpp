@@ -35,6 +35,10 @@ const char *fs::FileOpenMode::write = "w";
 const char *fs::FileOpenMode::append = "a";
 #endif
 
+
+volatile uint16_t AsyncWebServer::_responseCounter = 0;
+volatile uint16_t AsyncWebServer::_requestCounter = 0;
+
 AsyncWebServer::AsyncWebServer(uint16_t port)
   : _server(port)
   , _rewrites(LinkedList<AsyncWebRewrite*>([](AsyncWebRewrite* r){ delete r; }))

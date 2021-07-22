@@ -34,7 +34,6 @@ void* memchr(void* ptr, int ch, size_t count)
   return nullptr;
 }
 
-
 /*
  * Abstract Response
  * */
@@ -107,10 +106,14 @@ AsyncWebServerResponse::AsyncWebServerResponse(int code, const String &contentTy
   if (closeConnectionHeader) {
     addHeader(F("Connection"), F("close"));
   }
+  InterruptLock();
+  AsyncWebServer::_responseCounter++;
 }
 
 AsyncWebServerResponse::~AsyncWebServerResponse(){
   _headers.free();
+  InterruptLock();
+  AsyncWebServer::_responseCounter--;
 }
 
 void AsyncWebServerResponse::setCode(int code){

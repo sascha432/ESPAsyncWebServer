@@ -73,10 +73,16 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   c->onTimeout([](void *r, AsyncClient *c, uint32_t time){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onTimeout(time); }, this);
   c->onData([](void *r, AsyncClient *c, void *buf, size_t len){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onData(buf, len); }, this);
   c->onPoll([](void *r, AsyncClient *c){ (void)c; AsyncWebServerRequest *req = ( AsyncWebServerRequest*)r; req->_onPoll(); }, this);
+  InterruptLock();
+  AsyncWebServer::_requestCounter++;
 }
 
 AsyncWebServerRequest::~AsyncWebServerRequest()
 {
+  {
+    InterruptLock();
+    AsyncWebServer::_requestCounter--;
+  }
   _headers.free();
 
   _params.free();

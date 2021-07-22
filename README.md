@@ -3,6 +3,7 @@
 - Optimized memory usage by moving all strings to PROGMEM, saving 1.5-2KB of RAM
 - Using improved WString class for better performance and less memory fragmentation
 - Removed limit of 8 messages per AsyncWebSocket and replaced it with a size limit for the entire queue or free heap. See AsyncWebSocket.h
+- Active requests/responses counters `AsyncWebServer::_responseCounter/_requestCounter`
 
 # Requirements
 
