@@ -30,21 +30,53 @@
 #include <libb64/cencode.h>
 
 
-#ifndef ESP8266
-extern "C" {
-typedef struct {
-    uint32_t state[5];
-    uint32_t count[2];
-    unsigned char buffer[64];
-} SHA1_CTX;
+#if ESP32
 
-void SHA1Transform(uint32_t state[5], const unsigned char buffer[64]);
-void SHA1Init(SHA1_CTX* context);
-void SHA1Update(SHA1_CTX* context, const unsigned char* data, uint32_t len);
-void SHA1Final(unsigned char digest[20], SHA1_CTX* context);
+#include <mbedtls/sha1.h>
+
+using SHA1_CTX = mbedtls_sha1_context;
+
+// inline void SHA1Transform(uint32_t state[5], const unsigned char buffer[64])
+// {
+
+// }
+
+inline void SHA1Init(SHA1_CTX* context)
+{
+    mbedtls_sha1_init(context);
+    mbedtls_sha1_starts_ret(context);
 }
+
+inline void SHA1Update(SHA1_CTX* context, const unsigned char* data, uint32_t len)
+{
+    mbedtls_sha1_update_ret(context, data, len);
+}
+
+inline void SHA1Final(unsigned char digest[20], SHA1_CTX* context)
+{
+    mbedtls_sha1_finish_ret(context, digest);
+    mbedtls_sha1_free(context);
+}
+
+#elif !ESP8266
+
+extern "C" {
+    typedef struct {
+        uint32_t state[5];
+        uint32_t count[2];
+        unsigned char buffer[64];
+    } SHA1_CTX;
+
+    void SHA1Transform(uint32_t state[5], const unsigned char buffer[64]);
+    void SHA1Init(SHA1_CTX* context);
+    void SHA1Update(SHA1_CTX* context, const unsigned char* data, uint32_t len);
+    void SHA1Final(unsigned char digest[20], SHA1_CTX* context);
+}
+
 #else
-#include <Hash.h>
+
+    #include <Hash.h>
+
 #endif
 
 #define MAX_PRINTF_LEN 64

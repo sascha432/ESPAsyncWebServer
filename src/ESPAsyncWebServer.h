@@ -30,6 +30,7 @@
 #ifdef ESP32
 #include <WiFi.h>
 #include <AsyncTCP.h>
+#include <FS.h>
 #elif defined(ESP8266)
 #include <ESP8266WiFi.h>
 #include <ESPAsyncTCP.h>
@@ -40,6 +41,8 @@
 #if ESP8266
 #include <interrupts.h>
 using InterruptLock = esp8266::InterruptLock;
+#elif defined(HAVE_KFC_FIRMWARE_VERSION) && ESP32
+#include <misc.h>
 #else
 struct InterruptLock {};
 #endif
@@ -92,7 +95,7 @@ namespace fs {
     };
 };
 #else
-#include "FileOpenMode.h"
+#include <FileOpenMode.h>
 #endif
 
 //if this value is returned when asked for data, packet will not be sent and you will be asked for data again
@@ -165,12 +168,17 @@ typedef enum { RCT_NOT_USED = -1, RCT_DEFAULT = 0, RCT_HTTP, RCT_WS, RCT_EVENT, 
 typedef std::function<size_t(uint8_t*, size_t, size_t)> AwsResponseFiller;
 typedef std::function<String(const String&)> AwsTemplateProcessor;
 
+namespace WebServer {
+    class AsyncWebServerRequestParser;
+}
+
 class AsyncWebServerRequest {
   using File = fs::File;
   using FS = fs::FS;
   friend class AsyncWebServer;
   friend class AsyncCallbackWebHandler;
   friend class HttpCookieHeader;
+  friend WebServer::AsyncWebServerRequestParser;
   private:
     AsyncClient* _client;
     AsyncWebServer* _server;

@@ -67,12 +67,14 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer *s, AsyncClient *c)
   , _itemIsFile(false)
   , _tempObject(NULL)
 {
-  c->onError([](void *r, AsyncClient *c, int8_t error){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onError(error); }, this);
-  c->onAck([](void *r, AsyncClient *c, size_t len, uint32_t time){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onAck(len, time); }, this);
-  c->onDisconnect([](void *r, AsyncClient *c){ AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onDisconnect(); delete c; }, this);
-  c->onTimeout([](void *r, AsyncClient *c, uint32_t time){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onTimeout(time); }, this);
-  c->onData([](void *r, AsyncClient *c, void *buf, size_t len){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onData(buf, len); }, this);
-  c->onPoll([](void *r, AsyncClient *c){ (void)c; AsyncWebServerRequest *req = ( AsyncWebServerRequest*)r; req->_onPoll(); }, this);
+  if (c) {
+    c->onError([](void *r, AsyncClient *c, int8_t error){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onError(error); }, this);
+    c->onAck([](void *r, AsyncClient *c, size_t len, uint32_t time){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onAck(len, time); }, this);
+    c->onDisconnect([](void *r, AsyncClient *c){ AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onDisconnect(); delete c; }, this);
+    c->onTimeout([](void *r, AsyncClient *c, uint32_t time){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onTimeout(time); }, this);
+    c->onData([](void *r, AsyncClient *c, void *buf, size_t len){ (void)c; AsyncWebServerRequest *req = (AsyncWebServerRequest*)r; req->_onData(buf, len); }, this);
+    c->onPoll([](void *r, AsyncClient *c){ (void)c; AsyncWebServerRequest *req = ( AsyncWebServerRequest*)r; req->_onPoll(); }, this);
+  }
   InterruptLock();
   AsyncWebServer::_requestCounter++;
 }
