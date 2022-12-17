@@ -687,8 +687,8 @@ void AsyncWebSocketClient::ping(uint8_t *data, size_t len){
 
 }
 
-void AsyncWebSocketClient::_onError(int8_t error){
-  __DBG_printf("error=%u", error);
+void AsyncWebSocketClient::_onError(int8_t error) {
+  __DBG_printf("error=%d", error);
 }
 
 void AsyncWebSocketClient::_onTimeout(uint32_t time) {
