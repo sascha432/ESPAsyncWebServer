@@ -55,6 +55,8 @@ struct InterruptLock {};
 
 #define DEBUGF(...) //Serial.printf(__VA_ARGS__)
 
+#define HAVE_ESP_ASYNC_WEBSERVER_COUNTERS 1
+
 extern "C" const char _contentTypeTextPlain[] PROGMEM;
 
 #ifndef FPSTR
@@ -306,7 +308,7 @@ class AsyncWebServerRequest {
     // is taken into account, there is not much left. String and const char *
     // are using strcmp, const __FLashStringHelper * is using strcmp_P
     //
-    // For best performance, use the correct tpype, do not convert PROGMEM or
+    // For best performance, use the correct type, do not convert PROGMEM or
     // or const char into String objects, use const ref to store the
     // return values instead of copying the entire string and do not use
     // hasArg() + arg() etc... since it is executing the exact same code just
