@@ -8,7 +8,7 @@
 # Requirements
 
 - framework-arduinoespressif8266@3.30001.210627
-- https://github.com/sascha432/Arduino (modified ArduinoCore 3.0.1)
+- https://github.com/sascha432/Arduino (modified ArduinoCore 3.1.2)
 
 
 # ESPAsyncWebServer
@@ -21,8 +21,7 @@ Async HTTP and WebSocket Server for ESP8266 Arduino
 For ESP8266 it requires [ESPAsyncTCP](https://github.com/me-no-dev/ESPAsyncTCP)
 To use this library you might need to have the latest git versions of [ESP8266](https://github.com/esp8266/Arduino) Arduino Core
 
-For ESP32 it requires [AsyncTCP](https://github.com/me-no-dev/AsyncTCP) to work
-To use this library you might need to have the latest git versions of [ESP32](https://github.com/espressif/arduino-esp32) Arduino Core
+Do not use this version with ESP32.
 
 ## Table of contents
 - [ESPAsyncWebServer](#espasyncwebserver)
