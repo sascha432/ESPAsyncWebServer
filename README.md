@@ -1,3 +1,9 @@
+#  New version, different repo
+
+A new version forked from the current master is available. It has a lot bug fixes, works with ESP32 and ESP8266.
+
+[https://github.com/KFCLabs/ESPAsyncWebServer](https://github.com/KFCLabs/ESPAsyncWebServer)
+
 # Changes in this fork
 
 - Optimized memory usage by moving all strings to PROGMEM, saving 1.5-2KB of RAM
