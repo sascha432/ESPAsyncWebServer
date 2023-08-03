@@ -1,17 +1,4 @@
 # ESPAsyncWebServer 
-[![Build Status](https://travis-ci.org/me-no-dev/ESPAsyncWebServer.svg?branch=master)](https://travis-ci.org/me-no-dev/ESPAsyncWebServer) ![](https://github.com/me-no-dev/ESPAsyncWebServer/workflows/ESP%20Async%20Web%20Server%20CI/badge.svg) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/395dd42cfc674e6ca2e326af3af80ffc)](https://www.codacy.com/manual/me-no-dev/ESPAsyncWebServer?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=me-no-dev/ESPAsyncWebServer&amp;utm_campaign=Badge_Grade)
-
-## Changes
-
-This fork is optimized for memory usage, most strings have moved to PROGMEM and heap usage has been reduced.
-For optimal performance, use [Arduino core for ESP8266 with a modified String class](https://github.com/sascha432/Arduino). Without it, there is a bit more CPU/stack/heap usage during requests
-
-### Changelog
-
- - PROGMEM support for web sockets
- - Removed custom memchr() for ESP32 and newer cores of the ESP8266
- - Merged ESPAsyncWebServer master into this fork to fix crashes of the ESP32
- - Extra free RAM is about 2KB, this might have changed by now
 
 For help and support [![Join the chat at https://gitter.im/me-no-dev/ESPAsyncWebServer](https://badges.gitter.im/me-no-dev/ESPAsyncWebServer.svg)](https://gitter.im/me-no-dev/ESPAsyncWebServer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
@@ -22,6 +9,18 @@ To use this library you might need to have the latest git versions of [ESP8266](
 
 For ESP32 it requires [AsyncTCP](https://github.com/me-no-dev/AsyncTCP) to work
 To use this library you might need to have the latest git versions of [ESP32](https://github.com/espressif/arduino-esp32) Arduino Core
+
+## Changes
+
+This fork is optimized for memory usage. Most strings have been moved to PROGMEM and heap usage has been reduced. Most methods support reading strings/data from PROGMEM as well.
+For optimal performance, use [Arduino core for ESP8266 with a modified String class](https://github.com/sascha432/Arduino). Without it, there is a bit more CPU/stack/heap usage, but only during requests
+
+## Changelog
+
+ - PROGMEM support for web sockets
+ - Removed custom memchr() for ESP32 and newer cores of the ESP8266
+ - Merged ESPAsyncWebServer master into this fork to fix crashes of the ESP32
+ - Extra free RAM is about 2KB, this might have changed by now
 
 ## Table of contents
 - [ESPAsyncWebServer](#espasyncwebserver)
