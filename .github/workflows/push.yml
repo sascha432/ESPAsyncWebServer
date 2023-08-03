@@ -3,7 +3,7 @@ name: ESP Async Web Server CI
 on:
   push:
     branches:
-    - master
+    - masterx
     - release/*
   pull_request:
 
