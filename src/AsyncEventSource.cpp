@@ -25,7 +25,7 @@ static String generateEventMessage(const char *message, const char *event, uint3
 
   if(reconnect){
     ev += F("retry: ");
-    ev += reconnect;
+    ev += String(reconnect);
     ev += F("\r\n");
   }
 
@@ -96,7 +96,7 @@ static String generateEventMessage(const char *message, const char *event, uint3
         }
         lineStart = nextLine;
         if(lineStart == ((char *)message + messageLen))
-          ev += F("\r\n");
+          ev += "\r\n";
       }
     } while(lineStart < ((char *)message + messageLen));
   }
@@ -146,7 +146,7 @@ size_t AsyncEventSourceMessage::send(AsyncClient *client) {
   if(client->canSend())
     client->send();
   _sent += sent;
-  return sent;
+  return sent; 
 }
 
 // Client
@@ -159,7 +159,7 @@ AsyncEventSourceClient::AsyncEventSourceClient(AsyncWebServerRequest *request, A
   _lastId = 0;
   if(request->hasHeader(F("Last-Event-ID")))
     _lastId = atoi(request->getHeader(F("Last-Event-ID"))->value().c_str());
-
+    
   _client->setRxTimeout(0);
   _client->onError(NULL, NULL);
   _client->onAck([](void *r, AsyncClient* c, size_t len, uint32_t time){ (void)c; ((AsyncEventSourceClient*)(r))->_onAck(len, time); }, this);
@@ -185,7 +185,7 @@ void AsyncEventSourceClient::_queueMessage(AsyncEventSourceMessage *dataMessage)
     return;
   }
   if(_messageQueue.length() >= SSE_MAX_QUEUED_MESSAGES){
-      ets_printf(String(F("ERROR: Too many messages queued\n")).c_str());
+      ets_printf("ERROR: Too many messages queued\n");
       delete dataMessage;
   } else {
       _messageQueue.add(dataMessage);
@@ -276,7 +276,7 @@ void AsyncEventSource::_addClient(AsyncEventSourceClient * client){
     client->write((const char *)temp, 2053);
     free(temp);
   }*/
-
+  
   _clients.add(client);
   if(_connectcb)
     _connectcb(client);
@@ -297,10 +297,10 @@ void AsyncEventSource::close(){
 size_t AsyncEventSource::avgPacketsWaiting() const {
   if(_clients.isEmpty())
     return 0;
-
+  
   size_t    aql=0;
   uint32_t  nConnectedClients=0;
-
+  
   for(const auto &c: _clients){
     if(c->connected()) {
       aql+=c->packetsWaiting();
@@ -332,14 +332,13 @@ bool AsyncEventSource::canHandle(AsyncWebServerRequest *request){
   if(request->method() != HTTP_GET || !request->url().equals(_url)) {
     return false;
   }
-  request->addInterestingHeader(F("Last-Event-ID"));
+  request->addInterestingHeader("Last-Event-ID");
   return true;
 }
 
 void AsyncEventSource::handleRequest(AsyncWebServerRequest *request){
-  if((_username.length() && _password.length()) && !request->authenticate(_username.c_str(), _password.c_str())) {
+  if((_username.length() && _password.length()) && !request->authenticate(_username.c_str(), _password.c_str()))
     return request->requestAuthentication();
-  }
   request->send(new AsyncEventSourceResponse(this));
 }
 

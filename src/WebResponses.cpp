@@ -22,8 +22,6 @@
 #include "WebResponseImpl.h"
 #include "cbuf.h"
 
-const char _contentTypeTextPlain[] PROGMEM = { "text/plain" };
-
 // Since ESP8266 does not link memchr by default, here's its implementation.
 void* memchr(void* ptr, int ch, size_t count)
 {
@@ -34,66 +32,63 @@ void* memchr(void* ptr, int ch, size_t count)
   return nullptr;
 }
 
+
 /*
  * Abstract Response
  * */
-const char* AsyncWebServerResponse::_responseCodeToString(int code) {
-  return reinterpret_cast<const char *>(responseCodeToString(code));
-}
-
-const __FlashStringHelper *AsyncWebServerResponse::responseCodeToString(int code) {
+PGM_P AsyncWebServerResponse::_responseCodeToString(int code) {
   switch (code) {
-    case 100: return F("Continue");
-    case 101: return F("Switching Protocols");
-    case 200: return F("OK");
-    case 201: return F("Created");
-    case 202: return F("Accepted");
-    case 203: return F("Non-Authoritative Information");
-    case 204: return F("No Content");
-    case 205: return F("Reset Content");
-    case 206: return F("Partial Content");
-    case 300: return F("Multiple Choices");
-    case 301: return F("Moved Permanently");
-    case 302: return F("Found");
-    case 303: return F("See Other");
-    case 304: return F("Not Modified");
-    case 305: return F("Use Proxy");
-    case 307: return F("Temporary Redirect");
-    case 400: return F("Bad Request");
-    case 401: return F("Unauthorized");
-    case 402: return F("Payment Required");
-    case 403: return F("Forbidden");
-    case 404: return F("Not Found");
-    case 405: return F("Method Not Allowed");
-    case 406: return F("Not Acceptable");
-    case 407: return F("Proxy Authentication Required");
-    case 408: return F("Request Time-out");
-    case 409: return F("Conflict");
-    case 410: return F("Gone");
-    case 411: return F("Length Required");
-    case 412: return F("Precondition Failed");
-    case 413: return F("Request Entity Too Large");
-    case 414: return F("Request-URI Too Large");
-    case 415: return F("Unsupported Media Type");
-    case 416: return F("Requested range not satisfiable");
-    case 417: return F("Expectation Failed");
-    case 500: return F("Internal Server Error");
-    case 501: return F("Not Implemented");
-    case 502: return F("Bad Gateway");
-    case 503: return F("Service Unavailable");
-    case 504: return F("Gateway Time-out");
-    case 505: return F("HTTP Version not supported");
-    default:  return F("");
+    case 100: return PSTR("Continue");
+    case 101: return PSTR("Switching Protocols");
+    case 200: return PSTR("OK");
+    case 201: return PSTR("Created");
+    case 202: return PSTR("Accepted");
+    case 203: return PSTR("Non-Authoritative Information");
+    case 204: return PSTR("No Content");
+    case 205: return PSTR("Reset Content");
+    case 206: return PSTR("Partial Content");
+    case 300: return PSTR("Multiple Choices");
+    case 301: return PSTR("Moved Permanently");
+    case 302: return PSTR("Found");
+    case 303: return PSTR("See Other");
+    case 304: return PSTR("Not Modified");
+    case 305: return PSTR("Use Proxy");
+    case 307: return PSTR("Temporary Redirect");
+    case 400: return PSTR("Bad Request");
+    case 401: return PSTR("Unauthorized");
+    case 402: return PSTR("Payment Required");
+    case 403: return PSTR("Forbidden");
+    case 404: return PSTR("Not Found");
+    case 405: return PSTR("Method Not Allowed");
+    case 406: return PSTR("Not Acceptable");
+    case 407: return PSTR("Proxy Authentication Required");
+    case 408: return PSTR("Request Time-out");
+    case 409: return PSTR("Conflict");
+    case 410: return PSTR("Gone");
+    case 411: return PSTR("Length Required");
+    case 412: return PSTR("Precondition Failed");
+    case 413: return PSTR("Request Entity Too Large");
+    case 414: return PSTR("Request-URI Too Large");
+    case 415: return PSTR("Unsupported Media Type");
+    case 416: return PSTR("Requested range not satisfiable");
+    case 417: return PSTR("Expectation Failed");
+    case 500: return PSTR("Internal Server Error");
+    case 501: return PSTR("Not Implemented");
+    case 502: return PSTR("Bad Gateway");
+    case 503: return PSTR("Service Unavailable");
+    case 504: return PSTR("Gateway Time-out");
+    case 505: return PSTR("HTTP Version not supported");
+    default:  return PSTR("");
   }
 }
 
-AsyncWebServerResponse::AsyncWebServerResponse(int code, const String &contentType, size_t contentLength, bool chunked, bool closeConnectionHeader)
-  : _code(code)
+AsyncWebServerResponse::AsyncWebServerResponse()
+  : _code(0)
   , _headers(LinkedList<AsyncWebHeader *>([](AsyncWebHeader *h){ delete h; }))
-  , _contentType(contentType)
-  , _contentLength(contentLength)
-  , _sendContentLength(!chunked)
-  , _chunked(chunked)
+  , _contentType()
+  , _contentLength(0)
+  , _sendContentLength(true)
+  , _chunked(false)
   , _headLength(0)
   , _sentLength(0)
   , _ackedLength(0)
@@ -103,17 +98,10 @@ AsyncWebServerResponse::AsyncWebServerResponse(int code, const String &contentTy
   for(auto header: DefaultHeaders::Instance()) {
     _headers.add(new AsyncWebHeader(header->name(), header->value()));
   }
-  if (closeConnectionHeader) {
-    addHeader(F("Connection"), F("close"));
-  }
-  InterruptLock();
-  AsyncWebServer::_responseCounter++;
 }
 
 AsyncWebServerResponse::~AsyncWebServerResponse(){
   _headers.free();
-  InterruptLock();
-  AsyncWebServer::_responseCounter--;
 }
 
 void AsyncWebServerResponse::setCode(int code){
@@ -178,22 +166,17 @@ size_t AsyncWebServerResponse::_ack(AsyncWebServerRequest *request, size_t len, 
 /*
  * String/Code Response
  * */
-AsyncBasicResponse::AsyncBasicResponse(int code, const String& contentType, const String& content) :
-  AsyncWebServerResponse(code, contentType, content.length(), false, true),
-  _content(content)
-{
-  if (!_contentType.length()) {
-    _contentType = FPSTR(_contentTypeTextPlain);
+AsyncBasicResponse::AsyncBasicResponse(int code, const String& contentType, const String& content){
+  _code = code;
+  _content = content;
+  _contentType = contentType;
+  if(_content.length()){
+    _contentLength = _content.length();
+    if(!_contentType.length()) {
+      _contentType = F("text/plain");
+    }
   }
-}
-
-AsyncBasicResponse::AsyncBasicResponse(int code, const String& contentType, String &&content) :
-  AsyncWebServerResponse(code, contentType, content.length(), false, true),
-  _content(std::move(content))
-{
-  if (!_contentType.length()) {
-    _contentType = FPSTR(_contentTypeTextPlain);
-  }
+  addHeader(F("Connection"), F("close"));
 }
 
 void AsyncBasicResponse::_respond(AsyncWebServerRequest *request){
@@ -414,7 +397,7 @@ size_t AsyncAbstractResponse::_fillBufferAndProcessTemplates(uint8_t* data, size
     // If closing placeholder is found:
     if(pTemplateEnd) {
       // prepare argument to callback
-      const size_t paramNameLength = std::min((size_t)sizeof(buf) - 1, (size_t)(pTemplateEnd - pTemplateStart - 1));
+      const size_t paramNameLength = std::min(sizeof(buf) - 1, (unsigned int)(pTemplateEnd - pTemplateStart - 1));
       if(paramNameLength) {
         memcpy(buf, pTemplateStart + 1, paramNameLength);
         buf[paramNameLength] = 0;
@@ -501,10 +484,6 @@ AsyncFileResponse::~AsyncFileResponse(){
 }
 
 void AsyncFileResponse::_setContentType(const String& path){
-#if HAVE_EXTERN_GET_CONTENT_TYPE_FUNCTION
-  extern const __FlashStringHelper *getContentType(const String &path);
-  _contentType = getContentType(path);
-#else
   if (path.endsWith(F(".html"))) _contentType = F("text/html");
   else if (path.endsWith(F(".htm"))) _contentType = F("text/html");
   else if (path.endsWith(F(".css"))) _contentType = F("text/css");
@@ -524,7 +503,6 @@ void AsyncFileResponse::_setContentType(const String& path){
   else if (path.endsWith(F(".zip"))) _contentType = F("application/zip");
   else if(path.endsWith(F(".gz"))) _contentType = F("application/x-gzip");
   else _contentType = F("text/plain");
-#endif
 }
 
 AsyncFileResponse::AsyncFileResponse(FS &fs, const String& path, const String& contentType, bool download, AwsTemplateProcessor callback): AsyncAbstractResponse(callback){
@@ -539,7 +517,7 @@ AsyncFileResponse::AsyncFileResponse(FS &fs, const String& path, const String& c
     _chunked = false;
   }
 
-  _content = fs.open(_path, fs::FileOpenMode::read);
+  _content = fs.open(_path, "r");
   _contentLength = _content.size();
 
   if(contentType.length() == 0)

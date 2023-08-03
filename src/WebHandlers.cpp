@@ -22,11 +22,11 @@
 #include "WebHandlerImpl.h"
 
 AsyncStaticWebHandler::AsyncStaticWebHandler(const char* uri, FS& fs, const char* path, const char* cache_control)
-  : _fs(fs), _uri(uri), _path(path), _default_file(F("index.htm")), _cache_control(cache_control), _last_modified(), _callback(nullptr)
+  : _fs(fs), _uri(uri), _path(path), _default_file(F("index.htm")), _cache_control(cache_control), _last_modified(""), _callback(nullptr)
 {
   // Ensure leading '/'
-  if (_uri.length() == 0 || _uri[0] != '/') _uri = String('/') + _uri;
-  if (_path.length() == 0 || _path[0] != '/') _path = String('/') + _path;
+  if (_uri.length() == 0 || _uri[0] != '/') _uri = '/' + _uri;
+  if (_path.length() == 0 || _path[0] != '/') _path = '/' + _path;
 
   // If path ends with '/' we assume a hint that this is a directory to improve performance.
   // However - if it does not end with '/' we, can't assume a file, path can still be a directory.
@@ -63,12 +63,8 @@ AsyncStaticWebHandler& AsyncStaticWebHandler::setLastModified(const char* last_m
 }
 
 AsyncStaticWebHandler& AsyncStaticWebHandler::setLastModified(struct tm* last_modified){
-  auto formatP = PSTR("%a, %d %b %Y %H:%M:%S %Z");
-  char format[strlen_P(formatP) + 1];
-  strcpy_P(format, formatP);
-
   char result[30];
-  strftime(result, sizeof(result), format, last_modified);
+  strftime(result, sizeof(result), String(F("%a, %d %b %Y %H:%M:%S %Z")).c_str(), last_modified);
   return setLastModified((const char *)result);
 }
 
@@ -84,9 +80,10 @@ AsyncStaticWebHandler& AsyncStaticWebHandler::setLastModified(){
   return setLastModified(last_modified);
 }
 #endif
+
 bool AsyncStaticWebHandler::canHandle(AsyncWebServerRequest *request){
-  if(request->method() != HTTP_GET
-    || !request->url().startsWith(_uri)
+  if(request->method() != HTTP_GET 
+    || !request->url().startsWith(_uri) 
     || !request->isExpectedRequestedConnType(RCT_DEFAULT, RCT_HTTP)
   ){
     return false;
@@ -126,7 +123,7 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest *request)
 
   // Try to add default file, ensure there is a trailing '/' ot the path.
   if (path.length() == 0 || path[path.length()-1] != '/')
-    path += String('/');
+    path += '/';
   path += _default_file;
 
   return _fileExists(request, path);
@@ -146,17 +143,17 @@ bool AsyncStaticWebHandler::_fileExists(AsyncWebServerRequest *request, const St
   String gzip = path + F(".gz");
 
   if (_gzipFirst) {
-    request->_tempFile = _fs.open(gzip, fs::FileOpenMode::read);
+    request->_tempFile = _fs.open(gzip, "r");
     gzipFound = FILE_IS_REAL(request->_tempFile);
     if (!gzipFound){
-      request->_tempFile = _fs.open(path, fs::FileOpenMode::read);
+      request->_tempFile = _fs.open(path, "r");
       fileFound = FILE_IS_REAL(request->_tempFile);
     }
   } else {
-    request->_tempFile = _fs.open(path, fs::FileOpenMode::read);
+    request->_tempFile = _fs.open(path, "r");
     fileFound = FILE_IS_REAL(request->_tempFile);
     if (!fileFound){
-      request->_tempFile = _fs.open(gzip, fs::FileOpenMode::read);
+      request->_tempFile = _fs.open(gzip, "r");
       gzipFound = FILE_IS_REAL(request->_tempFile);
     }
   }

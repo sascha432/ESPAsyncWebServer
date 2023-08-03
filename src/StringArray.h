@@ -170,8 +170,8 @@ class LinkedList {
       _root = nullptr;
     }
 
-    void setOnRemove(OnRemove cb) {
-      _onRemove = cb;
+    void setOnRemove(const OnRemove &cb) {
+        _onRemove = cb;
     }
 };
 
@@ -184,15 +184,6 @@ public:
   bool containsIgnoreCase(const String& str){
     for (const auto& s : *this) {
       if (str.equalsIgnoreCase(s)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool containsIgnoreCase(const __FlashStringHelper *str){
-    for (const auto& s : *this) {
-      if (s.equalsIgnoreCase(str)) {
         return true;
       }
     }

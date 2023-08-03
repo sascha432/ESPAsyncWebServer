@@ -1,6 +1,6 @@
 {
-  "name":"ESP Async WebServer",
-  "description":"Asynchronous HTTP and WebSocket Server Library for ESP8266 and ESP32",
+  "name":"ESP Async WebServer PROGMEM",
+  "description":"Asynchronous HTTP and WebSocket Server Library for ESP8266 and ESP32, optimized RAM usage",
   "keywords":"http,async,websocket,webserver",
   "authors":
   {
@@ -16,13 +16,23 @@
   "license": "LGPL-3.0",
   "frameworks": "arduino",
   "platforms": ["espressif8266", "espressif32"],
+  "build": {
+    "srcFilter": [
+      "+<*.cpp>",
+      "-<SPIFFSEditor.cpp>"
+    ]
+  },
   "dependencies": [
     {
+      "owner": "me-no-dev",
       "name": "ESPAsyncTCP",
+      "version": "^1.2.2",
       "platforms": "espressif8266"
     },
     {
+      "owner": "me-no-dev",      
       "name": "AsyncTCP",
+      "version": "^1.1.1",
       "platforms": "espressif32"
     },
     {

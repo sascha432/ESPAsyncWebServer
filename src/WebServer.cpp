@@ -29,15 +29,6 @@ bool ON_AP_FILTER(AsyncWebServerRequest *request) {
   return WiFi.localIP() != request->client()->localIP();
 }
 
-#ifndef HAVE_FS_FILE_OPEN_MODE
-const char *fs::FileOpenMode::read = "r";
-const char *fs::FileOpenMode::write = "w";
-const char *fs::FileOpenMode::append = "a";
-#endif
-
-
-volatile uint16_t AsyncWebServer::_responseCounter = 0;
-volatile uint16_t AsyncWebServer::_requestCounter = 0;
 
 AsyncWebServer::AsyncWebServer(uint16_t port)
   : _server(port)
@@ -45,9 +36,8 @@ AsyncWebServer::AsyncWebServer(uint16_t port)
   , _handlers(LinkedList<AsyncWebHandler*>([](AsyncWebHandler* h){ delete h; }))
 {
   _catchAllHandler = new AsyncCallbackWebHandler();
-  if(_catchAllHandler == NULL) {
+  if(_catchAllHandler == NULL)
     return;
-  }
   _server.onClient([](void *s, AsyncClient* c){
     if(c == NULL)
       return;
@@ -62,11 +52,9 @@ AsyncWebServer::AsyncWebServer(uint16_t port)
 }
 
 AsyncWebServer::~AsyncWebServer(){
-  reset();
+  reset();  
   end();
-  if(_catchAllHandler) {
-      delete _catchAllHandler;
-  }
+  if(_catchAllHandler) delete _catchAllHandler;
 }
 
 AsyncWebRewrite& AsyncWebServer::addRewrite(AsyncWebRewrite* rewrite){
@@ -130,7 +118,7 @@ void AsyncWebServer::_attachHandler(AsyncWebServerRequest *request){
       return;
     }
   }
-
+  
   request->addInterestingHeader(F("ANY"));
   request->setHandler(_catchAllHandler);
 }
@@ -195,7 +183,7 @@ void AsyncWebServer::onRequestBody(ArBodyHandlerFunction fn){
 void AsyncWebServer::reset(){
   _rewrites.free();
   _handlers.free();
-
+  
   if (_catchAllHandler != NULL){
     _catchAllHandler->onRequest(NULL);
     _catchAllHandler->onUpload(NULL);

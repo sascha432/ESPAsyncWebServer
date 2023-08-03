@@ -22,43 +22,16 @@
 #define ASYNCWEBSOCKET_H_
 
 #include <Arduino.h>
-
-// total number of messages in the queue for all socket servers
-#ifndef WS_MAX_QUEUED_MESSAGES
-#  define WS_MAX_QUEUED_MESSAGES                  12
-#endif
-
-// max. size of the messages in the queue of all socket servers
-#ifndef WS_MAX_QUEUED_MESSAGES_SIZE
-#  if defined(ESP8266)
-#      define WS_MAX_QUEUED_MESSAGES_SIZE         8192
-#  else
-#      define WS_MAX_QUEUED_MESSAGES_SIZE         65535
-#  endif
-#endif
-
-// if free heap drops below this number, the queue reports fuill. 0 = disable
-#ifndef WS_MAX_QUEUED_MESSAGES_MIN_HEAP
-#  define WS_MAX_QUEUED_MESSAGES_MIN_HEAP         0
-#endif
-
-// minimum number of messages before WS_MAX_QUEUED_MESSAGES_MIN_HEAP gets checked
-#ifndef WS_MIN_QUEUED_MESSAGES
-#    define WS_MIN_QUEUED_MESSAGES                6
-#endif
-// min queue size before WS_MAX_QUEUED_MESSAGES_MIN_HEAP gets checked
-#ifndef WS_MIN_QUEUED_MESSAGES_SIZE
-#    if defined(ESP8266)
-#        define WS_MIN_QUEUED_MESSAGES_SIZE       2048
-#    else
-#        define WS_MIN_QUEUED_MESSAGES_SIZE       8192
-#    endif
-#endif
-
 #ifdef ESP32
 #include <AsyncTCP.h>
+#ifndef WS_MAX_QUEUED_MESSAGES
+#define WS_MAX_QUEUED_MESSAGES 32
+#endif
 #else
 #include <ESPAsyncTCP.h>
+#ifndef WS_MAX_QUEUED_MESSAGES
+#define WS_MAX_QUEUED_MESSAGES 8
+#endif
 #endif
 #include <ESPAsyncWebServer.h>
 
@@ -81,7 +54,6 @@ class AsyncWebSocket;
 class AsyncWebSocketResponse;
 class AsyncWebSocketClient;
 class AsyncWebSocketControl;
-class WsClient;
 
 typedef struct {
     /** Message type as defined by enum AwsFrameType.
@@ -122,7 +94,7 @@ class AsyncWebSocketMessageBuffer {
   public:
     AsyncWebSocketMessageBuffer();
     AsyncWebSocketMessageBuffer(size_t size);
-    AsyncWebSocketMessageBuffer(uint8_t *data, size_t size, bool allocate = true); // allocate=true copies the content of data to _data, false sets _data to data
+    AsyncWebSocketMessageBuffer(uint8_t * data, size_t size);
     AsyncWebSocketMessageBuffer(const AsyncWebSocketMessageBuffer &);
     AsyncWebSocketMessageBuffer(AsyncWebSocketMessageBuffer &&);
     ~AsyncWebSocketMessageBuffer();
@@ -133,11 +105,11 @@ class AsyncWebSocketMessageBuffer {
     void unlock() { _lock = false; }
     uint8_t * get() { return _data; }
     size_t length() { return _len; }
+    void setLength(size_t len) { _len = len; }
     uint32_t count() { return _count; }
     bool canDelete() { return (!_count && !_lock); }
 
     friend AsyncWebSocket;
-    friend WsClient;
 
 };
 
@@ -185,36 +157,6 @@ public:
     virtual bool betweenFrames() const override { return _acked == _ack; }
     virtual void ack(size_t len, uint32_t time) override ;
     virtual size_t send(AsyncClient *client) override ;
-};
-
-class AsyncWebSocketMessageBufferLinkedList : public LinkedList<AsyncWebSocketMessageBuffer *> {
-public:
-  using T = AsyncWebSocketMessageBuffer *;
-  using LT = LinkedList<T>;
-
-private:
-  void onRemove(AsyncWebSocketMessageBuffer *t) {
-    _totalSize -= t->length();
-    _totalCount--;
-    delete t;
-  }
-
-public:
-  AsyncWebSocketMessageBufferLinkedList() : LT([this](AsyncWebSocketMessageBuffer *b){ this->onRemove(b); }) {
-  }
-
-  void add(const T& t){
-    _totalSize += t->length();
-    _totalCount++;
-    LT::add(t);
-  }
-
-private:
-  friend class AsyncWebSocket;
-
-  // counters for all web sockets
-  static size_t _totalCount;
-  static size_t _totalSize;
 };
 
 class AsyncWebSocketClient {
@@ -289,9 +231,7 @@ class AsyncWebSocketClient {
     void binary(const __FlashStringHelper *data, size_t len);
     void binary(AsyncWebSocketMessageBuffer *buffer);
 
-    bool canSend() { return !_queueIsFull(); }
-
-    bool _queueIsFull() const;
+    bool canSend() { return _messageQueue.length() < WS_MAX_QUEUED_MESSAGES; }
 
     //system callbacks (do not call)
     void _onAck(size_t len, uint32_t time);
@@ -329,14 +269,8 @@ class AsyncWebSocket: public AsyncWebHandler {
     AsyncWebSocketClient * client(uint32_t id);
     bool hasClient(uint32_t id){ return client(id) != NULL; }
 
-    void close(uint32_t id, uint16_t code = 0, const char *message = nullptr);
-    void close(uint32_t id, uint16_t code = 0, const __FlashStringHelper *message = nullptr) {
-      close(id, code, reinterpret_cast<const char *>(message));
-    }
-    void closeAll(uint16_t code = 0, const char *message = nullptr);
-    void closeAll(uint16_t code = 0, const __FlashStringHelper *message = nullptr) {
-      closeAll(code, reinterpret_cast<const char *>(message));
-    }
+    void close(uint32_t id, uint16_t code=0, const char * message=NULL);
+    void closeAll(uint16_t code=0, const char * message=NULL);
     void cleanupClients(uint16_t maxClients = DEFAULT_MAX_WS_CLIENTS);
 
     void ping(uint32_t id, uint8_t *data=NULL, size_t len=0);
@@ -398,62 +332,11 @@ class AsyncWebSocket: public AsyncWebHandler {
 
     //  messagebuffer functions/objects.
     AsyncWebSocketMessageBuffer * makeBuffer(size_t size = 0);
-    AsyncWebSocketMessageBuffer * makeBuffer(uint8_t *data, size_t size, bool allocate = true);
-    AsyncWebSocketMessageBufferLinkedList _buffers;
+    AsyncWebSocketMessageBuffer * makeBuffer(uint8_t * data, size_t size);
+    LinkedList<AsyncWebSocketMessageBuffer *> _buffers;
     void _cleanBuffers();
 
     AsyncWebSocketClientLinkedList getClients() const;
-
-public:
-#ifndef DEBUG_AWS_QUEUE_COUNTERS
-#define DEBUG_AWS_QUEUE_COUNTERS 0
-#endif
-
-#if DEBUG_AWS_QUEUE_COUNTERS
-    // total for all sockets
-  size_t getQueuedMessageCount() const {
-    _verifyCounters();
-    return AsyncWebSocketMessageBufferLinkedList::_totalCount;
-  }
-  size_t getQueuedMessageSize() const {
-    _verifyCounters();
-    return AsyncWebSocketMessageBufferLinkedList::_totalSize;
-  }
-
-  static size_t _getQueuedMessageCount() {
-    return AsyncWebSocketMessageBufferLinkedList::_totalCount;
-  }
-  static size_t _getQueuedMessageSize() {
-    return AsyncWebSocketMessageBufferLinkedList::_totalSize;
-  }
-private:
-  void _verifyCounters() const {
-    size_t t=0,c=0;
-    for(const auto b: _buffers) {
-      t+=b->length();
-      c++;
-    }
-    if (AsyncWebSocketMessageBufferLinkedList::_totalSize!=t || AsyncWebSocketMessageBufferLinkedList::_totalCount!=c) {
-      ::printf(PSTR("AsyncWebSocketMessageBufferLinkedList size %u=%u cnt %u=%u\n"), AsyncWebSocketMessageBufferLinkedList::_totalSize, t,AsyncWebSocketMessageBufferLinkedList::_totalCount, c);
-      panic();
-    }
-  }
-#else
-  size_t getQueuedMessageCount() const {
-    return _getQueuedMessageCount();
-  }
-  size_t getQueuedMessageSize() const {
-    return _getQueuedMessageSize();
-  }
-
-  static size_t _getQueuedMessageCount() {
-    return AsyncWebSocketMessageBufferLinkedList::_totalCount;
-  }
-  static size_t _getQueuedMessageSize() {
-    return AsyncWebSocketMessageBufferLinkedList::_totalSize;
-  }
-#endif
-
 };
 
 //WebServer response to authenticate the socket and detach the tcp client from the web server request

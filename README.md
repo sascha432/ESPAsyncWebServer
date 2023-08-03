@@ -1,24 +1,14 @@
-#  New version, different repo
-
-A new version forked from the current master is available. It has a lot bug fixes, works with ESP32 and ESP8266.
-
-[https://github.com/KFCLabs/ESPAsyncWebServer](https://github.com/KFCLabs/ESPAsyncWebServer)
-
-# Changes in this fork
-
-- Optimized memory usage by moving all strings to PROGMEM, saving 1.5-2KB of RAM
-- Using improved WString class for better performance and less memory fragmentation
-- Removed limit of 8 messages per AsyncWebSocket and replaced it with a size limit for the entire queue or free heap. See AsyncWebSocket.h
-- Active requests/responses counters `AsyncWebServer::_responseCounter/_requestCounter`
-
-# Requirements
-
-- framework-arduinoespressif8266@3.30001.210627
-- https://github.com/sascha432/Arduino (modified ArduinoCore 3.1.2)
-
-
-# ESPAsyncWebServer
+# ESPAsyncWebServer 
 [![Build Status](https://travis-ci.org/me-no-dev/ESPAsyncWebServer.svg?branch=master)](https://travis-ci.org/me-no-dev/ESPAsyncWebServer) ![](https://github.com/me-no-dev/ESPAsyncWebServer/workflows/ESP%20Async%20Web%20Server%20CI/badge.svg) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/395dd42cfc674e6ca2e326af3af80ffc)](https://www.codacy.com/manual/me-no-dev/ESPAsyncWebServer?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=me-no-dev/ESPAsyncWebServer&amp;utm_campaign=Badge_Grade)
+
+## Changes
+
+This fork is optimized for memory usage, most strings have moved to PROGMEM and heap usage has been reduced.
+For optimal performance, use [Arduino core for ESP8266 with a modified String class](https://github.com/sascha432/Arduino). Without it, there is a bit more CPU/stack/heap usage during requests
+
+### Changelog
+
+ - Merged ESPAsyncWebServer master into this fork to fix crashes of the ESP32
 
 For help and support [![Join the chat at https://gitter.im/me-no-dev/ESPAsyncWebServer](https://badges.gitter.im/me-no-dev/ESPAsyncWebServer.svg)](https://gitter.im/me-no-dev/ESPAsyncWebServer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
@@ -27,7 +17,8 @@ Async HTTP and WebSocket Server for ESP8266 Arduino
 For ESP8266 it requires [ESPAsyncTCP](https://github.com/me-no-dev/ESPAsyncTCP)
 To use this library you might need to have the latest git versions of [ESP8266](https://github.com/esp8266/Arduino) Arduino Core
 
-Do not use this version with ESP32.
+For ESP32 it requires [AsyncTCP](https://github.com/me-no-dev/AsyncTCP) to work
+To use this library you might need to have the latest git versions of [ESP32](https://github.com/espressif/arduino-esp32) Arduino Core
 
 ## Table of contents
 - [ESPAsyncWebServer](#espasyncwebserver)
@@ -1122,7 +1113,7 @@ client->binary(flash_binary, 4);
 ```
 
 ### Direct access to web socket message buffer
-When sending a web socket message using the above methods a buffer is created.  Under certain circumstances you might want to manipulate or populate this buffer directly from your application, for example to prevent unnecessary duplications of the data.  This example below shows how to create a buffer and print data to it from an ArduinoJson object then send it.
+When sending a web socket message using the above methods a buffer is created.  Under certain circumstances you might want to manipulate or populate this buffer directly from your application, for example to prevent unnecessary duplications of the data.  This example below shows how to create a buffer and print data to it from an ArduinoJson object then send it.   
 
 ```cpp
 void sendDataWs(AsyncWebSocketClient * client)
@@ -1464,7 +1455,7 @@ Example of OTA code
     // Clean SPIFFS
     SPIFFS.end();
 
-    // Disable client connections
+    // Disable client connections    
     ws.enable(false);
 
     // Advertise connected clients what's going on
@@ -1479,7 +1470,7 @@ Example of OTA code
 
 ### Adding Default Headers
 
-In some cases, such as when working with CORS, or with some sort of custom authentication system,
+In some cases, such as when working with CORS, or with some sort of custom authentication system, 
 you might need to define a header that should get added to all responses (including static, websocket and EventSource).
 The DefaultHeaders singleton allows you to do this.
 
@@ -1506,7 +1497,7 @@ webServer.onNotFound([](AsyncWebServerRequest *request) {
 
 ### Path variable
 
-With path variable you can create a custom regex rule for a specific parameter in a route.
+With path variable you can create a custom regex rule for a specific parameter in a route. 
 For example we want a `sensorId` parameter in a route rule to match only a integer.
 
 ```cpp
@@ -1533,7 +1524,7 @@ Add/Update the following line:
 For platformio modify `platformio.ini`:
 ```ini
 [env:myboard]
-build_flags =
+build_flags = 
   -DASYNCWEBSERVER_REGEX
 ```
 *NOTE*: By enabling `ASYNCWEBSERVER_REGEX`, `<regex>` will be included. This will add an 100k to your binary.
