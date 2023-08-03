@@ -8,7 +8,10 @@ For optimal performance, use [Arduino core for ESP8266 with a modified String cl
 
 ### Changelog
 
+ - PROGMEM support for web sockets
+ - Removed custom memchr() for ESP32 and newer cores of the ESP8266
  - Merged ESPAsyncWebServer master into this fork to fix crashes of the ESP32
+ - Extra free RAM is about 2KB, this might have changed by now
 
 For help and support [![Join the chat at https://gitter.im/me-no-dev/ESPAsyncWebServer](https://badges.gitter.im/me-no-dev/ESPAsyncWebServer.svg)](https://gitter.im/me-no-dev/ESPAsyncWebServer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 

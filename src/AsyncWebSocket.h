@@ -94,7 +94,7 @@ class AsyncWebSocketMessageBuffer {
   public:
     AsyncWebSocketMessageBuffer();
     AsyncWebSocketMessageBuffer(size_t size);
-    AsyncWebSocketMessageBuffer(uint8_t * data, size_t size);
+    AsyncWebSocketMessageBuffer(const uint8_t *data, size_t size); // supports PROGMEM
     AsyncWebSocketMessageBuffer(const AsyncWebSocketMessageBuffer &);
     AsyncWebSocketMessageBuffer(AsyncWebSocketMessageBuffer &&);
     ~AsyncWebSocketMessageBuffer();
@@ -135,7 +135,7 @@ class AsyncWebSocketBasicMessage: public AsyncWebSocketMessage {
     size_t _acked;
     uint8_t * _data;
 public:
-    AsyncWebSocketBasicMessage(const char * data, size_t len, uint8_t opcode=WS_TEXT, bool mask=false);
+    AsyncWebSocketBasicMessage(const char * data, size_t len, uint8_t opcode=WS_TEXT, bool mask=false); // supports PROGMEM
     AsyncWebSocketBasicMessage(uint8_t opcode=WS_TEXT, bool mask=false);
     virtual ~AsyncWebSocketBasicMessage() override;
     virtual bool betweenFrames() const override { return _acked == _ack; }
@@ -223,8 +223,8 @@ class AsyncWebSocketClient {
     void text(const __FlashStringHelper *data);
     void text(AsyncWebSocketMessageBuffer *buffer);
 
-    void binary(const char * message, size_t len);
-    void binary(const char * message);
+    void binary(const char * message, size_t len); // PROGMEM supported
+    void binary(const char * message); // PROGMEM supported
     void binary(uint8_t * message, size_t len);
     void binary(char * message);
     void binary(const String &message);
