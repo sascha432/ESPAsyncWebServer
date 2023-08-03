@@ -22,15 +22,29 @@
 #include "WebResponseImpl.h"
 #include "cbuf.h"
 
-// Since ESP8266 does not link memchr by default, here's its implementation.
-void* memchr(void* ptr, int ch, size_t count)
-{
-  unsigned char* p = static_cast<unsigned char*>(ptr);
-  while(count--)
-    if(*p++ == static_cast<unsigned char>(ch))
-      return --p;
-  return nullptr;
-}
+#if ESP8266
+
+  #include <core_version.h>
+
+  #if ARDUINO_ESP8266_MAJOR < 3
+
+    // Since ESP8266 does not link memchr by default, here's its implementation.
+    void* memchr(void* ptr, int ch, size_t count)
+    {
+    unsigned char* p = static_cast<unsigned char*>(ptr);
+    while(count--)
+        if(*p++ == static_cast<unsigned char>(ch))
+        return --p;
+    return nullptr;
+    }
+
+  #endif
+
+#else
+
+  #include <memory.h>
+
+#endif
 
 
 /*
