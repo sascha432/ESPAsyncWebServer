@@ -224,7 +224,7 @@ class AsyncWebSocketClient {
     }
 
     void text(const char * message, size_t len) { // supports PROGMEM
-      text(message, strlen_P(message));
+      _queueMessage(new AsyncWebSocketBasicMessage(message, len));
     }
     void text(const char *message) { // supports PROGMEM
       text(message, strlen_P(message));
