@@ -11,7 +11,14 @@
 			"titleBar.activeForeground": "#FCFCFF"
 		},
 		"files.associations": {
-			"vector": "cpp"
+			"*.json": "json",
+			"vector": "cpp",
+			"regex": "cpp",
+			"xlocmon": "cpp",
+			"xlocnum": "cpp",
+			"xloctime": "cpp",
+			"cstdio": "cpp",
+			"system_error": "cpp"
 		}
 	}
 }

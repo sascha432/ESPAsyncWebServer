@@ -103,11 +103,11 @@ class AsyncWebSocketMessageBuffer {
     bool reserve(size_t size);
     void lock() { _lock = true; }
     void unlock() { _lock = false; }
-    uint8_t * get() { return _data; }
-    size_t length() { return _len; }
+    uint8_t *get() { return _data; }
+    size_t length() const { return _len; }
     void setLength(size_t len) { _len = len; }
-    uint32_t count() { return _count; }
-    bool canDelete() { return (!_count && !_lock); }
+    uint32_t count() const { return _count; }
+    bool canDelete() const { return (!_count && !_lock); }
 
     friend AsyncWebSocket;
 
@@ -135,7 +135,7 @@ class AsyncWebSocketBasicMessage: public AsyncWebSocketMessage {
     size_t _acked;
     uint8_t * _data;
 public:
-    AsyncWebSocketBasicMessage(const char * data, size_t len, uint8_t opcode=WS_TEXT, bool mask=false); // supports PROGMEM
+    AsyncWebSocketBasicMessage(const char *data, size_t len, uint8_t opcode=WS_TEXT, bool mask=false); // supports PROGMEM
     AsyncWebSocketBasicMessage(uint8_t opcode=WS_TEXT, bool mask=false);
     virtual ~AsyncWebSocketBasicMessage() override;
     virtual bool betweenFrames() const override { return _acked == _ack; }
@@ -145,14 +145,14 @@ public:
 
 class AsyncWebSocketMultiMessage: public AsyncWebSocketMessage {
   private:
-    uint8_t * _data;
+    uint8_t *_data;
     size_t _len;
     size_t _sent;
     size_t _ack;
     size_t _acked;
     AsyncWebSocketMessageBuffer * _WSbuffer;
 public:
-    AsyncWebSocketMultiMessage(AsyncWebSocketMessageBuffer * buffer, uint8_t opcode=WS_TEXT, bool mask=false);
+    AsyncWebSocketMultiMessage(AsyncWebSocketMessageBuffer *buffer, uint8_t opcode=WS_TEXT, bool mask=false);
     virtual ~AsyncWebSocketMultiMessage() override;
     virtual bool betweenFrames() const override { return _acked == _ack; }
     virtual void ack(size_t len, uint32_t time) override ;
@@ -196,8 +196,11 @@ class AsyncWebSocketClient {
     uint16_t  remotePort();
 
     //control frames
-    void close(uint16_t code=0, const char * message=NULL);
-    void ping(uint8_t *data=NULL, size_t len=0);
+    void close(uint16_t code = 0, const char * message = nullptr); // supports PROGMEM
+    void ping(const uint8_t *data = nullptr, size_t len = 0); // supports PROGMEM
+    void ping(const char *data = nullptr, size_t len = 0) { // supports PROGMEM
+        ping(reinterpret_cast<const uint8_t *>(data), len);
+    }
 
     //set auto-ping period in seconds. disabled if zero (default)
     void keepAlivePeriod(uint16_t seconds){
@@ -211,43 +214,79 @@ class AsyncWebSocketClient {
     void message(AsyncWebSocketMessage *message){ _queueMessage(message); }
     bool queueIsFull();
 
-    size_t printf(const char *format, ...)  __attribute__ ((format (printf, 2, 3)));
-#ifndef ESP32
     size_t printf_P(PGM_P formatP, ...)  __attribute__ ((format (printf, 2, 3)));
-#endif
-    void text(const char * message, size_t len);
-    void text(const char * message);
-    void text(uint8_t * message, size_t len);
-    void text(char * message);
-    void text(const String &message);
-    void text(const __FlashStringHelper *data);
-    void text(AsyncWebSocketMessageBuffer *buffer);
+    size_t printf(const char *format, ...)  __attribute__ ((format (printf, 2, 3))) { // supports PROGMEM
+      va_list arg;
+      va_start(arg, format);
+      size_t len = printf_P(format, arg);
+      va_end(arg);
+      return len;
+    }
 
-    void binary(const char * message, size_t len); // PROGMEM supported
-    void binary(const char * message); // PROGMEM supported
-    void binary(uint8_t * message, size_t len);
-    void binary(char * message);
-    void binary(const String &message);
-    void binary(const __FlashStringHelper *data, size_t len);
-    void binary(AsyncWebSocketMessageBuffer *buffer);
+    void text(const char * message, size_t len) { // supports PROGMEM
+      text(message, strlen_P(message));
+    }
+    void text(const char *message) { // supports PROGMEM
+      text(message, strlen_P(message));
+    }
+    void text(const uint8_t * message, size_t len) { // supports PROGMEM
+      text((const char *)message, len);
+    }
+    void text(char * message) {
+      text(message, strlen(message));
+    }
+    void text(const String &message) {
+      text(message.c_str(), message.length());
+    }
+    void text(const __FlashStringHelper *data) {
+      text(reinterpret_cast<const char *>(data));
+    }
+    void text(AsyncWebSocketMessageBuffer *buffer) {
+      _queueMessage(new AsyncWebSocketMultiMessage(buffer));
+    }
+
+    void binary(const char *message, size_t len) { // supports PROGMEM
+      _queueMessage(new AsyncWebSocketBasicMessage(message, len, WS_BINARY));
+    }
+    void binary(const char *message) { // supports PROGMEM
+      binary(message, strlen_P(message));
+    }
+    void binary(const uint8_t *message, size_t len) { // supports PROGMEM
+      binary((const char *)message, len);
+    }
+    void binary(char *message) {
+      binary(message, strlen(message));
+    }
+    void binary(const String &message) {
+      binary(message.c_str(), message.length());
+    }
+    void binary(const __FlashStringHelper *data, size_t len) {
+      binary(reinterpret_cast<PGM_P>(data), len);
+    }
+    void binary(AsyncWebSocketMessageBuffer *buffer) {
+      _queueMessage(new AsyncWebSocketMultiMessage(buffer, WS_BINARY));
+    }
 
     bool canSend() { return _messageQueue.length() < WS_MAX_QUEUED_MESSAGES; }
 
     //system callbacks (do not call)
     void _onAck(size_t len, uint32_t time);
-    void _onError(int8_t);
+    void _onError(int8_t) {}
     void _onPoll();
-    void _onTimeout(uint32_t time);
+    void _onTimeout(uint32_t time) {
+      _client->close(true);
+    }
     void _onDisconnect();
     void _onData(void *pbuf, size_t plen);
 };
 
-typedef std::function<void(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len)> AwsEventHandler;
+using AwsEventHandler = std::function<void(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len)>;
 
 //WebServer Handler implementation that plays the role of a socket server
 class AsyncWebSocket: public AsyncWebHandler {
   public:
-    typedef LinkedList<AsyncWebSocketClient *> AsyncWebSocketClientLinkedList;
+    using AsyncWebSocketClientLinkedList = LinkedList<AsyncWebSocketClient *>;
+
   private:
     String _url;
     AsyncWebSocketClientLinkedList _clients;
@@ -258,7 +297,7 @@ class AsyncWebSocket: public AsyncWebHandler {
 
   public:
     AsyncWebSocket(const String& url);
-    ~AsyncWebSocket();
+    ~AsyncWebSocket() {}
     const char * url() const { return _url.c_str(); }
     void enable(bool e){ _enabled = e; }
     bool enabled() const { return _enabled; }
@@ -269,52 +308,100 @@ class AsyncWebSocket: public AsyncWebHandler {
     AsyncWebSocketClient * client(uint32_t id);
     bool hasClient(uint32_t id){ return client(id) != NULL; }
 
-    void close(uint32_t id, uint16_t code=0, const char * message=NULL);
-    void closeAll(uint16_t code=0, const char * message=NULL);
+    void close(uint32_t id, uint16_t code=0, const char * message=NULL);  // supports PROGMEM
+    void closeAll(uint16_t code=0, const char * message=NULL); // supports PROGMEM
     void cleanupClients(uint16_t maxClients = DEFAULT_MAX_WS_CLIENTS);
 
-    void ping(uint32_t id, uint8_t *data=NULL, size_t len=0);
-    void pingAll(uint8_t *data=NULL, size_t len=0); //  done
+    void ping(uint32_t id, const uint8_t *data=NULL, size_t len=0); // supports PROGMEM
+    void pingAll(const uint8_t *data=NULL, size_t len=0); // supports PROGMEM
 
-    void text(uint32_t id, const char * message, size_t len);
-    void text(uint32_t id, const char * message);
-    void text(uint32_t id, uint8_t * message, size_t len);
-    void text(uint32_t id, char * message);
-    void text(uint32_t id, const String &message);
+    void text(uint32_t id, const char *message, size_t len); // supports PROGMEM
+    void text(uint32_t id, const char *message) { // supports PROGMEM
+      text(id, message, strlen_P(message));
+    }
+    void text(uint32_t id, const uint8_t *message, size_t len) { // supports PROGMEM
+      text(id, (const char *)message, len);
+    }
+    void text(uint32_t id, char *message) {
+      text(id, message, strlen(message));
+    }
+    void text(uint32_t id, const String &message) {
+      text(id, message.c_str(), message.length());
+    }
     void text(uint32_t id, const __FlashStringHelper *message);
 
-    void textAll(const char * message, size_t len);
-    void textAll(const char * message);
-    void textAll(uint8_t * message, size_t len);
-    void textAll(char * message);
-    void textAll(const String &message);
-    void textAll(const __FlashStringHelper *message); //  need to convert
+    void textAll(const char *message, size_t len) { // supports PROGMEM
+      textAll(makeBuffer((const uint8_t *)message, len));
+    }
+    void textAll(const char *message) { // supports PROGMEM
+      return textAll(message, strlen_P(message));
+    }
+    void textAll(const uint8_t *message, size_t len) { // supports PROGMEM
+      return textAll((const char *)message, len);
+    }
+    void textAll(char * message){
+      textAll(message, strlen(message));
+    }
+    void textAll(const String &message) {
+      textAll(message.c_str(), message.length());
+    }
+    void textAll(const __FlashStringHelper *message);
     void textAll(AsyncWebSocketMessageBuffer * buffer);
 
-    void binary(uint32_t id, const char * message, size_t len);
-    void binary(uint32_t id, const char * message);
-    void binary(uint32_t id, uint8_t * message, size_t len);
-    void binary(uint32_t id, char * message);
-    void binary(uint32_t id, const String &message);
+
+    void binary(uint32_t id, const char * message, size_t len); // supports PROGMEM
+    void binary(uint32_t id, const char * message) { // supports PROGMEM
+      binary(id, message, strlen_P(message));
+    }
+    void binary(uint32_t id, const uint8_t *message, size_t len) { // supports PROGMEM
+      binary(id, (const char *)message, len);
+    }
+    void binary(uint32_t id, char * message) {
+      binary(id, message, strlen(message));
+    }
+    void binary(uint32_t id, const String &message) {
+      binary(id, message.c_str(), message.length());
+    }
     void binary(uint32_t id, const __FlashStringHelper *message, size_t len);
 
-    void binaryAll(const char * message, size_t len);
-    void binaryAll(const char * message);
-    void binaryAll(uint8_t * message, size_t len);
-    void binaryAll(char * message);
-    void binaryAll(const String &message);
+    void binaryAll(const char *message, size_t len) { // supports PROGMEM
+      binaryAll(makeBuffer((const uint8_t *)message, len));
+    }
+    void binaryAll(const char * message) {
+      binaryAll(message, strlen_P(message));
+    }
+    void binaryAll(const uint8_t * message, size_t len) { // supports PROGMEM
+      binaryAll((const char *)message, len);
+    }
+    void binaryAll(char * message) {
+      binaryAll(message, strlen(message));
+    }
+    void binaryAll(const String &message) {
+      binaryAll(message.c_str(), message.length());
+    }
     void binaryAll(const __FlashStringHelper *message, size_t len);
     void binaryAll(AsyncWebSocketMessageBuffer * buffer);
 
     void message(uint32_t id, AsyncWebSocketMessage *message);
     void messageAll(AsyncWebSocketMultiMessage *message);
 
-    size_t printf(uint32_t id, const char *format, ...)  __attribute__ ((format (printf, 3, 4)));
-    size_t printfAll(const char *format, ...)  __attribute__ ((format (printf, 2, 3)));
-#ifndef ESP32
     size_t printf_P(uint32_t id, PGM_P formatP, ...)  __attribute__ ((format (printf, 3, 4)));
-#endif
+    size_t printf(uint32_t id, const char *format, ...)  __attribute__ ((format (printf, 3, 4))) { // supports PROGMEM
+      va_list arg;
+      va_start(arg, format);
+      size_t len = printf_P(id, format, arg);
+      va_end(arg);
+      return len;
+    }
+
     size_t printfAll_P(PGM_P formatP, ...)  __attribute__ ((format (printf, 2, 3)));
+    size_t printfAll(const char *format, ...)  __attribute__ ((format (printf, 2, 3))) { // supports PROGMEM
+      va_list arg;
+      va_start(arg, format);
+      size_t len = printfAll_P(format, arg);
+      va_end(arg);
+      return len;
+    }
 
     //event listener
     void onEvent(AwsEventHandler handler){
@@ -322,8 +409,12 @@ class AsyncWebSocket: public AsyncWebHandler {
     }
 
     //system callbacks (do not call)
-    uint32_t _getNextId(){ return _cNextId++; }
-    void _addClient(AsyncWebSocketClient * client);
+    uint32_t _getNextId() {
+        return _cNextId++;
+    }
+    void _addClient(AsyncWebSocketClient * client) {
+          _clients.add(client);
+    }
     void _handleDisconnect(AsyncWebSocketClient * client);
     void _handleEvent(AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
     virtual bool canHandle(AsyncWebServerRequest *request) override final;
@@ -331,8 +422,8 @@ class AsyncWebSocket: public AsyncWebHandler {
 
 
     //  messagebuffer functions/objects.
-    AsyncWebSocketMessageBuffer * makeBuffer(size_t size = 0);
-    AsyncWebSocketMessageBuffer * makeBuffer(uint8_t * data, size_t size);
+    AsyncWebSocketMessageBuffer *makeBuffer(size_t size = 0);
+    AsyncWebSocketMessageBuffer *makeBuffer(const uint8_t *data, size_t size); // supports PROGMEM
     LinkedList<AsyncWebSocketMessageBuffer *> _buffers;
     void _cleanBuffers();
 
