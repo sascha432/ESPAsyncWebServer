@@ -531,7 +531,7 @@ AsyncFileResponse::AsyncFileResponse(FS &fs, const String& path, const String& c
     _chunked = false;
   }
 
-  _content = fs.open(_path, "r");
+  _content = fs.open(_path, AsyncWeBServerFileOpenReadMode);
   _contentLength = _content.size();
 
   if(contentType.length() == 0)
@@ -545,10 +545,10 @@ AsyncFileResponse::AsyncFileResponse(FS &fs, const String& path, const String& c
 
   if(download) {
     // set filename and force download
-    snprintf_P(buf, sizeof (buf), PSTR("attachment; filename=\"%s\""), filename);
+    snprintf_P(buf, sizeof(buf), PSTR("attachment; filename=\"%s\""), filename);
   } else {
     // set filename and force rendering
-    snprintf_P(buf, sizeof (buf), PSTR("inline; filename=\"%s\""), filename);
+    snprintf_P(buf, sizeof(buf), PSTR("inline; filename=\"%s\""), filename);
   }
   addHeader(F("Content-Disposition"), buf);
 }
@@ -577,9 +577,9 @@ AsyncFileResponse::AsyncFileResponse(File content, const String& path, const Str
   char* filename = (char*)path.c_str() + filenameStart;
 
   if(download) {
-    snprintf_P(buf, sizeof (buf), PSTR("attachment; filename=\"%s\""), filename);
+    snprintf_P(buf, sizeof(buf), PSTR("attachment; filename=\"%s\""), filename);
   } else {
-    snprintf_P(buf, sizeof (buf), PSTR("inline; filename=\"%s\""), filename);
+    snprintf_P(buf, sizeof(buf), PSTR("inline; filename=\"%s\""), filename);
   }
   addHeader(F("Content-Disposition"), buf);
 }

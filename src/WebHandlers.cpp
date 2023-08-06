@@ -25,17 +25,21 @@ AsyncStaticWebHandler::AsyncStaticWebHandler(const char* uri, FS& fs, const char
   : _fs(fs), _uri(uri), _path(path), _default_file(F("index.htm")), _cache_control(cache_control), _last_modified(""), _callback(nullptr)
 {
   // Ensure leading '/'
-  if (_uri.length() == 0 || _uri[0] != '/') _uri = '/' + _uri;
-  if (_path.length() == 0 || _path[0] != '/') _path = '/' + _path;
+  if (!_uri.startsWith('/')) {
+    _uri = '/' + _uri;
+  }
+  if (!_path.startsWith('/')) {
+    _path = '/' + _path;
+  }
 
   // If path ends with '/' we assume a hint that this is a directory to improve performance.
   // However - if it does not end with '/' we, can't assume a file, path can still be a directory.
-  _isDir = _path[_path.length()-1] == '/';
+  _isDir = _path.endsWith('/');
 
   // Remove the trailing '/' so we can handle default file
   // Notice that root will be "" not "/"
-  if (_uri[_uri.length()-1] == '/') _uri = _uri.substring(0, _uri.length()-1);
-  if (_path[_path.length()-1] == '/') _path = _path.substring(0, _path.length()-1);
+  _uri.rtrim('/');
+  _path.rtrim('/');
 
   // Reset stats
   _gzipFirst = false;
@@ -82,8 +86,8 @@ AsyncStaticWebHandler& AsyncStaticWebHandler::setLastModified(){
 #endif
 
 bool AsyncStaticWebHandler::canHandle(AsyncWebServerRequest *request){
-  if(request->method() != HTTP_GET 
-    || !request->url().startsWith(_uri) 
+  if(request->method() != HTTP_GET
+    || !request->url().startsWith(_uri)
     || !request->isExpectedRequestedConnType(RCT_DEFAULT, RCT_HTTP)
   ){
     return false;
@@ -109,7 +113,7 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest *request)
   String path = request->url().substring(_uri.length());
 
   // We can skip the file check and look for default if request is to the root of a directory or that request path ends with '/'
-  bool canSkipFileCheck = (_isDir && path.length() == 0) || (path.length() && path[path.length()-1] == '/');
+  bool canSkipFileCheck = (_isDir && !path.length()) || path.endsWith('/');
 
   path = _path + path;
 
@@ -118,7 +122,7 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest *request)
     return true;
 
   // Can't handle if not default file
-  if (_default_file.length() == 0)
+  if (!_default_file.length())
     return false;
 
   // Try to add default file, ensure there is a trailing '/' ot the path.
@@ -135,6 +139,8 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest *request)
 #define FILE_IS_REAL(f) (f == true)
 #endif
 
+const char ICACHE_FLASH_ATTR STORE_ATTR *AsyncWeBServerFileOpenReadMode = "r";
+
 bool AsyncStaticWebHandler::_fileExists(AsyncWebServerRequest *request, const String& path)
 {
   bool fileFound = false;
@@ -143,17 +149,17 @@ bool AsyncStaticWebHandler::_fileExists(AsyncWebServerRequest *request, const St
   String gzip = path + F(".gz");
 
   if (_gzipFirst) {
-    request->_tempFile = _fs.open(gzip, "r");
+    request->_tempFile = _fs.open(gzip, AsyncWeBServerFileOpenReadMode);
     gzipFound = FILE_IS_REAL(request->_tempFile);
     if (!gzipFound){
-      request->_tempFile = _fs.open(path, "r");
+      request->_tempFile = _fs.open(path, AsyncWeBServerFileOpenReadMode);
       fileFound = FILE_IS_REAL(request->_tempFile);
     }
   } else {
-    request->_tempFile = _fs.open(path, "r");
+    request->_tempFile = _fs.open(path, AsyncWeBServerFileOpenReadMode);
     fileFound = FILE_IS_REAL(request->_tempFile);
     if (!fileFound){
-      request->_tempFile = _fs.open(gzip, "r");
+      request->_tempFile = _fs.open(gzip, AsyncWeBServerFileOpenReadMode);
       gzipFound = FILE_IS_REAL(request->_tempFile);
     }
   }

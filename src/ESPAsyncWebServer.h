@@ -57,6 +57,8 @@ class AsyncStaticWebHandler;
 class AsyncCallbackWebHandler;
 class AsyncResponseStream;
 
+extern "C" const char *AsyncWeBServerFileOpenReadMode;
+
 typedef enum {
     PARSE_REQ_START,
     PARSE_REQ_HEADERS,
