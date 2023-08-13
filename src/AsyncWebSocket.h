@@ -50,6 +50,9 @@
 #define DEFAULT_MAX_WS_CLIENTS 4
 #endif
 
+#pragma push_macro("printf_P")
+#undef printf_P
+
 class AsyncWebSocket;
 class AsyncWebSocketResponse;
 class AsyncWebSocketClient;
@@ -442,5 +445,6 @@ class AsyncWebSocketResponse: public AsyncWebServerResponse {
     bool _sourceValid() const { return true; }
 };
 
+#pragma pop_macro("printf_P")
 
 #endif /* ASYNCWEBSOCKET_H_ */

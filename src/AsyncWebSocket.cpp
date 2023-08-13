@@ -29,6 +29,8 @@
 #include <Hash.h>
 #endif
 
+#undef printf_P
+
 #define MAX_PRINTF_LEN 64
 
 size_t webSocketSendFrameWindow(AsyncClient *client){

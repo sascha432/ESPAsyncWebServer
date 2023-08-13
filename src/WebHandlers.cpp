@@ -139,7 +139,7 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest *request)
 #define FILE_IS_REAL(f) (f == true)
 #endif
 
-const char ICACHE_FLASH_ATTR STORE_ATTR *AsyncWeBServerFileOpenReadMode = "r";
+const char ICACHE_FLASH_ATTR __attribute__((aligned(4))) *AsyncWeBServerFileOpenReadMode = "r";
 
 bool AsyncStaticWebHandler::_fileExists(AsyncWebServerRequest *request, const String& path)
 {
