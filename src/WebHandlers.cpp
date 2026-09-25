@@ -19,27 +19,28 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "ESPAsyncWebServer.h"
+#include <Arduino_compat.h>
 #include "WebHandlerImpl.h"
 
 AsyncStaticWebHandler::AsyncStaticWebHandler(const char* uri, FS& fs, const char* path, const char* cache_control)
   : _fs(fs), _uri(uri), _path(path), _default_file(F("index.htm")), _cache_control(cache_control), _last_modified(""), _callback(nullptr)
 {
   // Ensure leading '/'
-  if (!_uri.startsWith('/')) {
+  if (!StrView(_uri).startsWith('/')) {
     _uri = '/' + _uri;
   }
-  if (!_path.startsWith('/')) {
+  if (!StrView(_path).startsWith('/')) {
     _path = '/' + _path;
   }
 
   // If path ends with '/' we assume a hint that this is a directory to improve performance.
   // However - if it does not end with '/' we, can't assume a file, path can still be a directory.
-  _isDir = _path.endsWith('/');
+  _isDir = StrView(_path).endsWith('/');
 
   // Remove the trailing '/' so we can handle default file
   // Notice that root will be "" not "/"
-  _uri.rtrim('/');
-  _path.rtrim('/');
+  StrWrapper(_uri).rtrim('/');
+  StrWrapper(_path).rtrim('/');
 
   // Reset stats
   _gzipFirst = false;
@@ -113,7 +114,7 @@ bool AsyncStaticWebHandler::_getFile(AsyncWebServerRequest *request)
   String path = request->url().substring(_uri.length());
 
   // We can skip the file check and look for default if request is to the root of a directory or that request path ends with '/'
-  bool canSkipFileCheck = (_isDir && !path.length()) || path.endsWith('/');
+  bool canSkipFileCheck = (_isDir && !path.length()) || StrView(path).endsWith('/');
 
   path = _path + path;
 

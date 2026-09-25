@@ -8,7 +8,15 @@
 		"workbench.colorCustomizations": {
 			"activityBar.background": "#0C198C",
 			"titleBar.activeBackground": "#1123C4",
-			"titleBar.activeForeground": "#FCFCFF"
+			"titleBar.activeForeground": "#FCFCFF",
+			"titleBar.inactiveBackground": "#0C198C",
+			"titleBar.inactiveForeground": "#FCFCFF",
+			"statusBar.background": "#0C198C",
+			"statusBar.foreground": "#FCFCFF",
+			"statusBar.debuggingBackground": "#0C198C",
+			"statusBar.debuggingForeground": "#FCFCFF",
+			"statusBar.noFolderBackground": "#0C198C",
+			"statusBar.noFolderForeground": "#FCFCFF"
 		},
 		"files.associations": {
 			"*.json": "json",

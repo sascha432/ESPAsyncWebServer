@@ -19,6 +19,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "WebAuthentication.h"
+#include <Arduino_compat.h>
 #include <libb64/cencode.h>
 #ifdef ESP32
 #include "mbedtls/md5.h"
@@ -170,46 +171,46 @@ bool checkDigestAuthentication(const char * header, const __FlashStringHelper *m
     }
     String varName = avLine.substring(0, eqSign);
     avLine = avLine.substring(eqSign + 1);
-    if(avLine.startsWith('"')){
+    if(StrView(avLine).startsWith('"')){
       avLine = avLine.substring(1, avLine.length() - 1);
     }
 
-    if(varName.equals(F("username"))){
+    if(F("username") == varName){
       if(!avLine.equals(username)){
         //os_printf("AUTH FAIL: username\n");
         return false;
       }
       myUsername = avLine;
-    } else if(varName.equals(F("realm"))){
+    } else if(F("realm") == varName){
       if(realm != NULL && !avLine.equals(realm)){
         //os_printf("AUTH FAIL: realm\n");
         return false;
       }
       myRealm = avLine;
-    } else if(varName.equals(F("nonce"))){
+    } else if(F("nonce") == varName){
       if(nonce != NULL && !avLine.equals(nonce)){
         //os_printf("AUTH FAIL: nonce\n");
         return false;
       }
       myNonce = avLine;
-    } else if(varName.equals(F("opaque"))){
+    } else if(F("opaque") == varName){
       if(opaque != NULL && !avLine.equals(opaque)){
         //os_printf("AUTH FAIL: opaque\n");
         return false;
       }
-    } else if(varName.equals(F("uri"))){
+    } else if(F("uri") == varName){
       if(uri != NULL && !avLine.equals(uri)){
         //os_printf("AUTH FAIL: uri\n");
         return false;
       }
       myUri = avLine;
-    } else if(varName.equals(F("response"))){
+    } else if(F("response") == varName){
       myResponse = avLine;
-    } else if(varName.equals(F("qop"))){
+    } else if(F("qop") == varName){
       myQop = avLine;
-    } else if(varName.equals(F("nc"))){
+    } else if(F("nc") == varName){
       myNc = avLine;
-    } else if(varName.equals(F("cnonce"))){
+    } else if(F("cnonce") == varName){
       myCnonce = avLine;
     }
   } while(nextBreak > 0);

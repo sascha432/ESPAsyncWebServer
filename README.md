@@ -1,3 +1,7 @@
+# ***NOTE:*** This version breaks compatibility with the regular Arduino Framework.
+
+Git commit 926065aebb7641fb18f3dc1e729413909153ad5a is the prev. version
+
 # ESPAsyncWebServer 
 
 For help and support [![Join the chat at https://gitter.im/me-no-dev/ESPAsyncWebServer](https://badges.gitter.im/me-no-dev/ESPAsyncWebServer.svg)](https://gitter.im/me-no-dev/ESPAsyncWebServer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)

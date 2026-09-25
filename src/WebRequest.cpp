@@ -19,6 +19,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "ESPAsyncWebServer.h"
+#include <Arduino_compat.h>
 #include "WebResponseImpl.h"
 #include "WebAuthentication.h"
 #include "WString.h"
@@ -146,7 +147,7 @@ void AsyncWebServerRequest::_onData(void *buf, size_t len){
       if(_parsedLength == 0){
         if(_contentType.startsWith(F("application/x-www-form-urlencoded"))){
           _isPlainPost = true;
-        } else if(_contentType == F("text/plain") && __is_param_char(((char*)buf)[0])){
+        } else if(F("text/plain") == _contentType && __is_param_char(((char*)buf)[0])){
           size_t i = 0;
           while (i<len && __is_param_char(((char*)buf)[i++]));
           if(i < len && ((char*)buf)[i-1] == '='){
@@ -260,19 +261,19 @@ bool AsyncWebServerRequest::_parseReqHead(){
   String u = _temp.substring(m.length()+1, index);
   _temp = _temp.substring(index+1);
 
-  if(m == F("GET")){
+  if(F("GET") == m){
     _method = HTTP_GET;
-  } else if(m == F("POST")){
+  } else if(F("POST") == m){
     _method = HTTP_POST;
-  } else if(m == F("DELETE")){
+  } else if(F("DELETE") == m){
     _method = HTTP_DELETE;
-  } else if(m == F("PUT")){
+  } else if(F("PUT") == m){
     _method = HTTP_PUT;
-  } else if(m == F("PATCH")){
+  } else if(F("PATCH") == m){
     _method = HTTP_PATCH;
-  } else if(m == F("HEAD")){
+  } else if(F("HEAD") == m){
     _method = HTTP_HEAD;
-  } else if(m == F("OPTIONS")){
+  } else if(F("OPTIONS") == m){
     _method = HTTP_OPTIONS;
   }
 
@@ -308,7 +309,7 @@ bool AsyncWebServerRequest::_parseReqHeader(){
       }
     } else if(name.equalsIgnoreCase(F("Content-Length"))){
       _contentLength = atoi(value.c_str());
-    } else if(name.equalsIgnoreCase(F("Expect")) && value == F("100-continue")){
+    } else if(name.equalsIgnoreCase(F("Expect")) && F("100-continue") == value){
       _expectingContinue = true;
     } else if(name.equalsIgnoreCase(F("Authorization"))){
       if(value.length() > 5 && value.substring(0,5).equalsIgnoreCase(F("Basic"))){
@@ -323,7 +324,7 @@ bool AsyncWebServerRequest::_parseReqHeader(){
         _reqconntype = RCT_WS;
       } else {
 
-        if(name.equalsIgnoreCase(F("Accept")) && value.indexOfIgnoreCase(F("text/event-stream")) != -1){
+        if(name.equalsIgnoreCase(F("Accept")) && StrView(value).indexOfIgnoreCase(F("text/event-stream")) != -1){
           // WebEvent request can be uniquely identified by header:  [Accept: text/event-stream]
           _reqconntype = RCT_EVENT;
         }
@@ -341,7 +342,7 @@ void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data){
   if(!data || (char)data == '&' || _parsedLength == _contentLength){
     String name = F("body");
     String value = _temp;
-    if(!_temp.startsWith('{') && !_temp.startsWith('[') && _temp.indexOf('=') > 0){
+    if(!StrView(_temp).startsWith('{') && !StrView(_temp).startsWith('[') && _temp.indexOf('=') > 0){
       name = _temp.substring(0, _temp.indexOf('='));
       value = _temp.substring(_temp.indexOf('=') + 1);
     }
@@ -423,9 +424,9 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last){
           while(_temp.indexOf(';') > 0){
             String name = _temp.substring(0, _temp.indexOf('='));
             String nameVal = _temp.substring(_temp.indexOf('=') + 2, _temp.indexOf(';') - 1);
-            if(name == F("name")) {
+            if(F("name") == name) {
               _itemName = nameVal;
-            } else if(name == F("filename")) {
+            } else if(F("filename") == name) {
               _itemFilename = nameVal;
               _itemIsFile = true;
             }
@@ -433,9 +434,9 @@ void AsyncWebServerRequest::_parseMultipartPostByte(uint8_t data, bool last){
           }
           String name = _temp.substring(0, _temp.indexOf('='));
           String nameVal = _temp.substring(_temp.indexOf('=') + 2, _temp.length() - 1);
-          if(name == F("name")){
+          if(F("name") == name){
             _itemName = nameVal;
-          } else if(name == F("filename")){
+          } else if(F("filename") == name){
             _itemFilename = nameVal;
             _itemIsFile = true;
           }
