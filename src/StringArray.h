@@ -23,6 +23,8 @@
 
 #include "stddef.h"
 #include "WString.h"
+#include <functional>
+#include <utility>
 
 template <typename T>
 class LinkedListNode {
@@ -45,12 +47,19 @@ class LinkedList {
     ItemType* _root;
     OnRemove _onRemove;
 
+    // the next node is read before the current one is yielded: removing the current element inside a
+    // range-for does not read the freed node (removing any other element is still not allowed)
     class Iterator {
       ItemType* _node;
+      ItemType* _next;
     public:
-      Iterator(ItemType* current = nullptr) : _node(current) {}
-      Iterator(const Iterator& i) : _node(i._node) {}
-      Iterator& operator ++() { _node = _node->next; return *this; }
+      Iterator(ItemType* current = nullptr) : _node(current), _next(current ? current->next : nullptr) {}
+      Iterator(const Iterator& i) : _node(i._node), _next(i._next) {}
+      Iterator& operator ++() {
+        _node = _next;
+        _next = _node ? _node->next : nullptr;
+        return *this;
+      }
       bool operator != (const Iterator& i) const { return _node != i._node; }
       const T& operator * () const { return _node->value(); }
       const T* operator -> () const { return &_node->value(); }
@@ -62,7 +71,24 @@ class LinkedList {
     ConstIterator end() const { return ConstIterator(nullptr); }
 
     LinkedList(OnRemove onRemove) : _root(nullptr), _onRemove(onRemove) {}
-    ~LinkedList(){}
+    // a copy would share the nodes with the original
+    LinkedList(const LinkedList&) = delete;
+    LinkedList& operator=(const LinkedList&) = delete;
+    LinkedList(LinkedList&& other) : _root(other._root), _onRemove(std::move(other._onRemove)) {
+      other._root = nullptr;
+    }
+    LinkedList& operator=(LinkedList&& other){
+      if(this != &other){
+        free();
+        _root = other._root;
+        _onRemove = std::move(other._onRemove);
+        other._root = nullptr;
+      }
+      return *this;
+    }
+    ~LinkedList(){
+      free();
+    }
     void add(const T& t){
       auto it = new ItemType(t);
       if(!_root){
@@ -135,6 +161,47 @@ class LinkedList {
         it = it->next;
       }
       return false;
+    }
+    // removes the element without calling the remove callback, the caller owns it afterwards
+    bool unlink(const T& t){
+      ItemType* prev = nullptr;
+      for(auto it = _root; it; prev = it, it = it->next){
+        if(it->value() == t){
+          if(prev){
+            prev->next = it->next;
+          } else {
+            _root = it->next;
+          }
+          delete it;
+          return true;
+        }
+      }
+      return false;
+    }
+    // removes every element the predicate matches, returns how many were removed
+    size_t remove_if(Predicate predicate){
+      size_t count = 0;
+      ItemType* prev = nullptr;
+      auto it = _root;
+      while(it){
+        auto next = it->next;
+        if(predicate(it->value())){
+          if(prev){
+            prev->next = next;
+          } else {
+            _root = next;
+          }
+          if (_onRemove) {
+            _onRemove(it->value());
+          }
+          delete it;
+          count++;
+        } else {
+          prev = it;
+        }
+        it = next;
+      }
+      return count;
     }
     bool remove_first(Predicate predicate){
       auto it = _root;

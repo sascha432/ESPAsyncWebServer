@@ -37,6 +37,12 @@
 
 #include "AsyncWebSynchronization.h"
 
+// #4: frames above this length are closed with 1009 (the payload is passed on in pieces, the limit is
+// for the application that collects a message)
+#ifndef ASYNCWEBSOCKET_MAX_FRAME_LEN
+#define ASYNCWEBSOCKET_MAX_FRAME_LEN 0x10000
+#endif
+
 #ifdef ESP8266
 #include <Hash.h>
 #ifdef CRYPTO_HASH_h // include Hash.h from espressif framework if the first include was from the crypto library
@@ -181,6 +187,23 @@ class AsyncWebSocketClient {
 
     uint32_t _lastMessageTime;
     uint32_t _keepAlivePeriod;
+    uint32_t _droppedMessages;
+
+    // #2: see AsyncWebServerRequest::_cbDepth
+    uint8_t _cbDepth;
+    bool _disconnected;
+    AsyncClient *_deadClient;
+
+    // #4: the frame header can be split across TCP segments, it is collected here first
+    uint8_t _hbuf[14];
+    uint8_t _hlen;
+    // payload of a control frame that is split across TCP segments (max. 125 byte, allocated on demand)
+    uint8_t *_ctrlData;
+
+    void _enter() { _cbDepth++; }
+    void _leave();
+    void _clientDisconnected(AsyncClient *c);
+    void _protocolError(uint16_t code);
 
     void _queueMessage(AsyncWebSocketMessage *dataMessage);
     void _queueControl(AsyncWebSocketControl *controlMessage);
@@ -221,17 +244,24 @@ class AsyncWebSocketClient {
     void message(AsyncWebSocketMessage *message){ _queueMessage(message); }
     bool queueIsFull();
 
-    size_t printf_P(PGM_P formatP, ...)  __attribute__ ((format (printf, 2, 3)));
+    size_t vprintf_P(PGM_P formatP, va_list arg);
+    size_t printf_P(PGM_P formatP, ...)  __attribute__ ((format (printf, 2, 3))) {
+      va_list arg;
+      va_start(arg, formatP);
+      size_t len = vprintf_P(formatP, arg);
+      va_end(arg);
+      return len;
+    }
     size_t printf(const char *format, ...)  __attribute__ ((format (printf, 2, 3))) { // supports PROGMEM
       va_list arg;
       va_start(arg, format);
-      size_t len = printf_P(format, arg);
+      size_t len = vprintf_P(format, arg);
       va_end(arg);
       return len;
     }
 
     void text(const char * message, size_t len) { // supports PROGMEM
-      _queueMessage(new AsyncWebSocketBasicMessage(message, len));
+      _queueMessage(new (std::nothrow) AsyncWebSocketBasicMessage(message, len));
     }
     void text(const char *message) { // supports PROGMEM
       text(message, strlen_P(message));
@@ -249,11 +279,11 @@ class AsyncWebSocketClient {
       text(reinterpret_cast<const char *>(data));
     }
     void text(AsyncWebSocketMessageBuffer *buffer) {
-      _queueMessage(new AsyncWebSocketMultiMessage(buffer));
+      _queueMessage(new (std::nothrow) AsyncWebSocketMultiMessage(buffer));
     }
 
     void binary(const char *message, size_t len) { // supports PROGMEM
-      _queueMessage(new AsyncWebSocketBasicMessage(message, len, WS_BINARY));
+      _queueMessage(new (std::nothrow) AsyncWebSocketBasicMessage(message, len, WS_BINARY));
     }
     void binary(const char *message) { // supports PROGMEM
       binary(message, strlen_P(message));
@@ -271,10 +301,12 @@ class AsyncWebSocketClient {
       binary(reinterpret_cast<PGM_P>(data), len);
     }
     void binary(AsyncWebSocketMessageBuffer *buffer) {
-      _queueMessage(new AsyncWebSocketMultiMessage(buffer, WS_BINARY));
+      _queueMessage(new (std::nothrow) AsyncWebSocketMultiMessage(buffer, WS_BINARY));
     }
 
-    bool canSend() { return _messageQueue.length() < WS_MAX_QUEUED_MESSAGES; }
+    bool canSend();
+    // messages that were dropped because the queue was full
+    uint32_t droppedMessages() const { return _droppedMessages; }
 
     //system callbacks (do not call)
     void _onAck(size_t len, uint32_t time);
@@ -304,7 +336,7 @@ class AsyncWebSocket: public AsyncWebHandler {
 
   public:
     AsyncWebSocket(const String& url);
-    ~AsyncWebSocket() {}
+    ~AsyncWebSocket();
     const char * url() const { return _url.c_str(); }
     void enable(bool e){ _enabled = e; }
     bool enabled() const { return _enabled; }
@@ -392,20 +424,34 @@ class AsyncWebSocket: public AsyncWebHandler {
     void message(uint32_t id, AsyncWebSocketMessage *message);
     void messageAll(AsyncWebSocketMultiMessage *message);
 
-    size_t printf_P(uint32_t id, PGM_P formatP, ...)  __attribute__ ((format (printf, 3, 4)));
+    size_t vprintf_P(uint32_t id, PGM_P formatP, va_list arg);
+    size_t printf_P(uint32_t id, PGM_P formatP, ...)  __attribute__ ((format (printf, 3, 4))) {
+      va_list arg;
+      va_start(arg, formatP);
+      size_t len = vprintf_P(id, formatP, arg);
+      va_end(arg);
+      return len;
+    }
     size_t printf(uint32_t id, const char *format, ...)  __attribute__ ((format (printf, 3, 4))) { // supports PROGMEM
       va_list arg;
       va_start(arg, format);
-      size_t len = printf_P(id, format, arg);
+      size_t len = vprintf_P(id, format, arg);
       va_end(arg);
       return len;
     }
 
-    size_t printfAll_P(PGM_P formatP, ...)  __attribute__ ((format (printf, 2, 3)));
+    size_t vprintfAll_P(PGM_P formatP, va_list arg);
+    size_t printfAll_P(PGM_P formatP, ...)  __attribute__ ((format (printf, 2, 3))) {
+      va_list arg;
+      va_start(arg, formatP);
+      size_t len = vprintfAll_P(formatP, arg);
+      va_end(arg);
+      return len;
+    }
     size_t printfAll(const char *format, ...)  __attribute__ ((format (printf, 2, 3))) { // supports PROGMEM
       va_list arg;
       va_start(arg, format);
-      size_t len = printfAll_P(format, arg);
+      size_t len = vprintfAll_P(format, arg);
       va_end(arg);
       return len;
     }
@@ -420,8 +466,12 @@ class AsyncWebSocket: public AsyncWebHandler {
         return _cNextId++;
     }
     void _addClient(AsyncWebSocketClient * client) {
-          _clients.add(client);
+      AsyncWebLockGuard l(_lock);
+      _clients.add(client);
     }
+    // #12: the client list, the queues of all clients and the buffers share this lock. It is never
+    // held while the event handler runs (the firmware locks its own mutex there and calls text())
+    AsyncWebLock &_getLock() { return _lock; }
     void _handleDisconnect(AsyncWebSocketClient * client);
     void _handleEvent(AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
     virtual bool canHandle(AsyncWebServerRequest *request) override final;
@@ -429,13 +479,19 @@ class AsyncWebSocket: public AsyncWebHandler {
 
 
     //  messagebuffer functions/objects.
+    // A new buffer is returned locked: the caller unlocks it after it was queued (textAll() and
+    // binaryAll() do that), otherwise it is never released
     AsyncWebSocketMessageBuffer *makeBuffer(size_t size = 0);
     AsyncWebSocketMessageBuffer *makeBuffer(const uint8_t *data, size_t size); // supports PROGMEM
     AsyncWebSocketMessageBuffer *makeBuffer(String &&str); // no copy
     LinkedList<AsyncWebSocketMessageBuffer *> _buffers;
     void _cleanBuffers();
 
-    AsyncWebSocketClientLinkedList getClients() const;
+    // the list is changed by the async_tcp task (ESP32): iterate it with forEachClient()
+    const AsyncWebSocketClientLinkedList &getClients() const;
+    // calls the function for each client with the client list locked, false stops the iteration.
+    // It must not wait for something that needs the async_tcp task
+    void forEachClient(std::function<bool(AsyncWebSocketClient *)> func);
 };
 
 //WebServer response to authenticate the socket and detach the tcp client from the web server request

@@ -20,32 +20,6 @@
 */
 #include "ESPAsyncWebServer.h"
 #include "WebResponseImpl.h"
-#include "cbuf.h"
-
-#if ESP8266
-
-  #include <core_version.h>
-
-  #if ARDUINO_ESP8266_MAJOR < 3
-
-    // Since ESP8266 does not link memchr by default, here's its implementation.
-    void* memchr(void* ptr, int ch, size_t count)
-    {
-    unsigned char* p = static_cast<unsigned char*>(ptr);
-    while(count--)
-        if(*p++ == static_cast<unsigned char>(ch))
-        return --p;
-    return nullptr;
-    }
-
-  #endif
-
-#else
-
-  #include <memory.h>
-
-#endif
-
 
 /*
  * Abstract Response
@@ -143,25 +117,42 @@ String AsyncWebServerResponse::_assembleHead(uint8_t version){
     if(_chunked)
       addHeader(F("Transfer-Encoding"), F("chunked"));
   }
-  String out = String();
-  int bufSize = 300;
-  char buf[bufSize];
+  // built without a stack buffer: a header of any length is sent completely
+  PGM_P codeStr = _responseCodeToString(_code);
+  size_t len = 9 + 4 + strlen_P(codeStr) + 2 + 2; // "HTTP/1.x " "nnn " reason CRLF ... CRLF
+  if(_sendContentLength)
+    len += 16 + 10 + 2;
+  if(_contentType.length())
+    len += 14 + _contentType.length() + 2;
+  for(const auto& header: _headers)
+    len += header->name().length() + 2 + header->value().length() + 2;
 
-  snprintf_P(buf, bufSize, PSTR("HTTP/1.%d %d %s\r\n"), version, _code, _responseCodeToString(_code));
-  out.concat(buf);
+  String out;
+  out.reserve(len);
+  out += F("HTTP/1.");
+  out += static_cast<unsigned>(version);
+  out += ' ';
+  out += _code;
+  out += ' ';
+  out += FPSTR(codeStr);
+  out += F("\r\n");
 
   if(_sendContentLength) {
-    snprintf_P(buf, bufSize, PSTR("Content-Length: %d\r\n"), _contentLength);
-    out.concat(buf);
+    out += F("Content-Length: ");
+    out += static_cast<unsigned>(_contentLength);
+    out += F("\r\n");
   }
   if(_contentType.length()) {
-    snprintf_P(buf, bufSize, PSTR("Content-Type: %s\r\n"), _contentType.c_str());
-    out.concat(buf);
+    out += F("Content-Type: ");
+    out += _contentType;
+    out += F("\r\n");
   }
 
   for(const auto& header: _headers){
-    snprintf_P(buf, bufSize, PSTR("%s: %s\r\n"), header->name().c_str(), header->value().c_str());
-    out.concat(buf);
+    out += header->name();
+    out += F(": ");
+    out += header->value();
+    out += F("\r\n");
   }
   _headers.free();
 
@@ -181,8 +172,17 @@ size_t AsyncWebServerResponse::_ack(AsyncWebServerRequest *request, size_t len, 
  * String/Code Response
  * */
 AsyncBasicResponse::AsyncBasicResponse(int code, const String& contentType, const String& content){
-  _code = code;
   _content = content;
+  _init(code, contentType);
+}
+
+AsyncBasicResponse::AsyncBasicResponse(int code, const String& contentType, String&& content){
+  _content = std::move(content);
+  _init(code, contentType);
+}
+
+void AsyncBasicResponse::_init(int code, const String& contentType){
+  _code = code;
   _contentType = contentType;
   if(_content.length()){
     _contentLength = _content.length();
@@ -193,62 +193,50 @@ AsyncBasicResponse::AsyncBasicResponse(int code, const String& contentType, cons
   addHeader(F("Connection"), F("close"));
 }
 
-void AsyncBasicResponse::_respond(AsyncWebServerRequest *request){
-  _state = RESPONSE_HEADERS;
-  String out = _assembleHead(request->version());
-  size_t outLen = out.length();
-  size_t space = request->client()->space();
-  if(!_contentLength && space >= outLen){
-    _writtenLength += request->client()->write(out.c_str(), outLen);
-    _state = RESPONSE_WAIT_ACK;
-  } else if(_contentLength && space >= outLen + _contentLength){
-    out += _content;
-    outLen += _contentLength;
-    _writtenLength += request->client()->write(out.c_str(), outLen);
-    _state = RESPONSE_WAIT_ACK;
-  } else if(space && space < outLen){
-    String partial = out.substring(0, space);
-    _content = out.substring(space) + _content;
-    _contentLength += outLen - space;
-    _writtenLength += request->client()->write(partial.c_str(), partial.length());
-    _state = RESPONSE_CONTENT;
-  } else if(space > outLen && space < (outLen + _contentLength)){
-    size_t shift = space - outLen;
-    outLen += shift;
-    _sentLength += shift;
-    out += _content.substring(0, shift);
-    _content = _content.substring(shift);
-    _writtenLength += request->client()->write(out.c_str(), outLen);
-    _state = RESPONSE_CONTENT;
-  } else {
-    _content = out + _content;
-    _contentLength += outLen;
-    _state = RESPONSE_CONTENT;
+// The head and the content are handed to the socket separately and the content is sent from an
+// offset: no copy of the content (out += _content) and no substring() per ack. The stack copies the
+// data (ASYNC_WRITE_FLAG_COPY, the ESP8266 default is a reference), the strings can be released
+size_t AsyncBasicResponse::_send(AsyncWebServerRequest *request){
+  auto client = request->client();
+  size_t space = client->space();
+  size_t written = 0;
+  if(_head.length() && space){
+    size_t added = client->add(_head.c_str(), std::min<size_t>(space, _head.length()), ASYNC_WRITE_FLAG_COPY);
+    _head.remove(0, added);
+    space -= added;
+    written += added;
   }
+  if(!_head.length() && _sentLength < _contentLength && space){
+    size_t added = client->add(_content.c_str() + _sentLength, std::min<size_t>(space, _contentLength - _sentLength), ASYNC_WRITE_FLAG_COPY);
+    _sentLength += added;
+    written += added;
+  }
+  if(written){
+    client->send();
+    _writtenLength += written;
+  }
+  if(!_head.length() && _sentLength >= _contentLength){
+    _content = String(); // everything was copied into the socket
+    _state = RESPONSE_WAIT_ACK;
+  }
+  return written;
+}
+
+void AsyncBasicResponse::_respond(AsyncWebServerRequest *request){
+  _head = _assembleHead(request->version());
+  _state = RESPONSE_CONTENT;
+  _send(request);
 }
 
 size_t AsyncBasicResponse::_ack(AsyncWebServerRequest *request, size_t len, uint32_t time){
   (void)time;
   _ackedLength += len;
   if(_state == RESPONSE_CONTENT){
-    size_t available = _contentLength - _sentLength;
-    size_t space = request->client()->space();
-    //we can fit in this packet
-    if(space > available){
-      _writtenLength += request->client()->write(_content.c_str(), available);
-      _content = String();
-      _state = RESPONSE_WAIT_ACK;
-      return available;
-    }
-    //send some data, the rest on ack
-    String out = _content.substring(0, space);
-    _content = _content.substring(space);
-    _sentLength += space;
-    _writtenLength += request->client()->write(out.c_str(), space);
-    return space;
+    return _send(request);
   } else if(_state == RESPONSE_WAIT_ACK){
     if(_ackedLength >= _writtenLength){
       _state = RESPONSE_END;
+      request->client()->setRxTimeout(ASYNCWEBSERVER_RESPONSE_END_RX_TIMEOUT);
     }
   }
   return 0;
@@ -259,14 +247,8 @@ size_t AsyncBasicResponse::_ack(AsyncWebServerRequest *request, size_t len, uint
  * Abstract Response
  * */
 
-AsyncAbstractResponse::AsyncAbstractResponse(AwsTemplateProcessor callback): _callback(callback)
+AsyncAbstractResponse::AsyncAbstractResponse()
 {
-  // In case of template processing, we're unable to determine real response size
-  if(callback) {
-    _contentLength = 0;
-    _sendContentLength = false;
-    _chunked = true;
-  }
 }
 
 void AsyncAbstractResponse::_respond(AsyncWebServerRequest *request){
@@ -294,7 +276,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
     } else {
       String out = _head.substring(0, space);
       _head = _head.substring(space);
-      _writtenLength += request->client()->write(out.c_str(), out.length());
+      _writtenLength += request->client()->write(out.c_str(), out.length(), ASYNC_WRITE_FLAG_COPY);
       return out.length();
     }
   }
@@ -313,8 +295,12 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
     }
 
     uint8_t *buf = (uint8_t *)malloc(outLen+headLen);
+    if (!buf && outLen > 512) {
+      // low heap: a smaller block keeps the response going, without a buffer it stalls
+      outLen = 512;
+      buf = (uint8_t *)malloc(outLen+headLen);
+    }
     if (!buf) {
-      // os_printf("_ack malloc %d failed\n", outLen+headLen);
       return 0;
     }
 
@@ -327,7 +313,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
     if(_chunked){
       // HTTP 1.1 allows leading zeros in chunk length. Or spaces may be added.
       // See RFC2616 sections 2, 3.6.1.
-      readLen = _fillBufferAndProcessTemplates(buf+headLen+6, outLen - 8);
+      readLen = _fillBuffer(buf+headLen+6, outLen - 8);
       if(readLen == RESPONSE_TRY_AGAIN){
           free(buf);
           return 0;
@@ -340,7 +326,7 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
       buf[outLen++] = '\r';
       buf[outLen++] = '\n';
     } else {
-      readLen = _fillBufferAndProcessTemplates(buf+headLen, outLen);
+      readLen = _fillBuffer(buf+headLen, outLen);
       if(readLen == RESPONSE_TRY_AGAIN){
           free(buf);
           return 0;
@@ -353,7 +339,8 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
     }
 
     if(outLen){
-        _writtenLength += request->client()->write((const char*)buf, outLen);
+        // the buffer is released below, the stack needs its own copy
+        _writtenLength += request->client()->write((const char*)buf, outLen, ASYNC_WRITE_FLAG_COPY);
     }
 
     if(_chunked){
@@ -370,127 +357,25 @@ size_t AsyncAbstractResponse::_ack(AsyncWebServerRequest *request, size_t len, u
     return outLen;
 
   } else if(_state == RESPONSE_WAIT_ACK){
-    if(!_sendContentLength || _ackedLength >= _writtenLength){
+    // the response ends when everything written was acked: closing earlier (an RST with
+    // close(true)) drops the data that is still in flight
+    if(_ackedLength >= _writtenLength){
       _state = RESPONSE_END;
+      request->client()->setRxTimeout(ASYNCWEBSERVER_RESPONSE_END_RX_TIMEOUT);
+      // without content length and chunks the close marks the end of the body; the disconnect
+      // handler deletes the request and this response, nothing may be touched afterwards
       if(!_chunked && !_sendContentLength)
-        request->client()->close(true);
+        request->client()->close();
     }
   }
   return 0;
 }
 
-size_t AsyncAbstractResponse::_readDataFromCacheOrContent(uint8_t* data, const size_t len)
-{
-    // If we have something in cache, copy it to buffer
-    const size_t readFromCache = std::min(len, _cache.size());
-    if(readFromCache) {
-      memcpy(data, _cache.data(), readFromCache);
-      _cache.erase(_cache.begin(), _cache.begin() + readFromCache);
-    }
-    // If we need to read more...
-    const size_t needFromFile = len - readFromCache;
-    const size_t readFromContent = _fillBuffer(data + readFromCache, needFromFile);
-    return readFromCache + readFromContent;
-}
-
-size_t AsyncAbstractResponse::_fillBufferAndProcessTemplates(uint8_t* data, size_t len)
-{
-  if(!_callback)
-    return _fillBuffer(data, len);
-
-  const size_t originalLen = len;
-  len = _readDataFromCacheOrContent(data, len);
-  // Now we've read 'len' bytes, either from cache or from file
-  // Search for template placeholders
-  uint8_t* pTemplateStart = data;
-  while((pTemplateStart < &data[len]) && (pTemplateStart = (uint8_t*)memchr(pTemplateStart, TEMPLATE_PLACEHOLDER, &data[len - 1] - pTemplateStart + 1))) { // data[0] ... data[len - 1]
-    uint8_t* pTemplateEnd = (pTemplateStart < &data[len - 1]) ? (uint8_t*)memchr(pTemplateStart + 1, TEMPLATE_PLACEHOLDER, &data[len - 1] - pTemplateStart) : nullptr;
-    // temporary buffer to hold parameter name
-    uint8_t buf[TEMPLATE_PARAM_NAME_LENGTH + 1];
-    String paramName;
-    // If closing placeholder is found:
-    if(pTemplateEnd) {
-      // prepare argument to callback
-      const size_t paramNameLength = std::min(sizeof(buf) - 1, (unsigned int)(pTemplateEnd - pTemplateStart - 1));
-      if(paramNameLength) {
-        memcpy(buf, pTemplateStart + 1, paramNameLength);
-        buf[paramNameLength] = 0;
-        paramName = String(reinterpret_cast<char*>(buf));
-      } else { // double percent sign encountered, this is single percent sign escaped.
-        // remove the 2nd percent sign
-        memmove(pTemplateEnd, pTemplateEnd + 1, &data[len] - pTemplateEnd - 1);
-        len += _readDataFromCacheOrContent(&data[len - 1], 1) - 1;
-        ++pTemplateStart;
-      }
-    } else if(&data[len - 1] - pTemplateStart + 1 < TEMPLATE_PARAM_NAME_LENGTH + 2) { // closing placeholder not found, check if it's in the remaining file data
-      memcpy(buf, pTemplateStart + 1, &data[len - 1] - pTemplateStart);
-      const size_t readFromCacheOrContent = _readDataFromCacheOrContent(buf + (&data[len - 1] - pTemplateStart), TEMPLATE_PARAM_NAME_LENGTH + 2 - (&data[len - 1] - pTemplateStart + 1));
-      if(readFromCacheOrContent) {
-        pTemplateEnd = (uint8_t*)memchr(buf + (&data[len - 1] - pTemplateStart), TEMPLATE_PLACEHOLDER, readFromCacheOrContent);
-        if(pTemplateEnd) {
-          // prepare argument to callback
-          *pTemplateEnd = 0;
-          paramName = String(reinterpret_cast<char*>(buf));
-          // Copy remaining read-ahead data into cache
-          _cache.insert(_cache.begin(), pTemplateEnd + 1, buf + (&data[len - 1] - pTemplateStart) + readFromCacheOrContent);
-          pTemplateEnd = &data[len - 1];
-        }
-        else // closing placeholder not found in file data, store found percent symbol as is and advance to the next position
-        {
-          // but first, store read file data in cache
-          _cache.insert(_cache.begin(), buf + (&data[len - 1] - pTemplateStart), buf + (&data[len - 1] - pTemplateStart) + readFromCacheOrContent);
-          ++pTemplateStart;
-        }
-      }
-      else // closing placeholder not found in content data, store found percent symbol as is and advance to the next position
-        ++pTemplateStart;
-    }
-    else // closing placeholder not found in content data, store found percent symbol as is and advance to the next position
-      ++pTemplateStart;
-    if(paramName.length()) {
-      // call callback and replace with result.
-      // Everything in range [pTemplateStart, pTemplateEnd] can be safely replaced with parameter value.
-      // Data after pTemplateEnd may need to be moved.
-      // The first byte of data after placeholder is located at pTemplateEnd + 1.
-      // It should be located at pTemplateStart + numBytesCopied (to begin right after inserted parameter value).
-      const String paramValue(_callback(paramName));
-      const char* pvstr = paramValue.c_str();
-      const unsigned int pvlen = paramValue.length();
-      const size_t numBytesCopied = std::min(pvlen, static_cast<unsigned int>(&data[originalLen - 1] - pTemplateStart + 1));
-      // make room for param value
-      // 1. move extra data to cache if parameter value is longer than placeholder AND if there is no room to store
-      if((pTemplateEnd + 1 < pTemplateStart + numBytesCopied) && (originalLen - (pTemplateStart + numBytesCopied - pTemplateEnd - 1) < len)) {
-        _cache.insert(_cache.begin(), &data[originalLen - (pTemplateStart + numBytesCopied - pTemplateEnd - 1)], &data[len]);
-        //2. parameter value is longer than placeholder text, push the data after placeholder which not saved into cache further to the end
-        memmove(pTemplateStart + numBytesCopied, pTemplateEnd + 1, &data[originalLen] - pTemplateStart - numBytesCopied);
-        len = originalLen; // fix issue with truncated data, not sure if it has any side effects
-      } else if(pTemplateEnd + 1 != pTemplateStart + numBytesCopied)
-        //2. Either parameter value is shorter than placeholder text OR there is enough free space in buffer to fit.
-        //   Move the entire data after the placeholder
-        memmove(pTemplateStart + numBytesCopied, pTemplateEnd + 1, &data[len] - pTemplateEnd - 1);
-      // 3. replace placeholder with actual value
-      memcpy(pTemplateStart, pvstr, numBytesCopied);
-      // If result is longer than buffer, copy the remainder into cache (this could happen only if placeholder text itself did not fit entirely in buffer)
-      if(numBytesCopied < pvlen) {
-        _cache.insert(_cache.begin(), pvstr + numBytesCopied, pvstr + pvlen);
-      } else if(pTemplateStart + numBytesCopied < pTemplateEnd + 1) { // result is copied fully; if result is shorter than placeholder text...
-        // there is some free room, fill it from cache
-        const size_t roomFreed = pTemplateEnd + 1 - pTemplateStart - numBytesCopied;
-        const size_t totalFreeRoom = originalLen - len + roomFreed;
-        len += _readDataFromCacheOrContent(&data[len - roomFreed], totalFreeRoom) - roomFreed;
-      } else { // result is copied fully; it is longer than placeholder text
-        const size_t roomTaken = pTemplateStart + numBytesCopied - pTemplateEnd - 1;
-        len = std::min(len + roomTaken, originalLen);
-      }
-    }
-  } // while(pTemplateStart)
-  return len;
-}
-
-
 /*
  * File Response
  * */
+
+const char ICACHE_FLASH_ATTR __attribute__((aligned(4))) *AsyncWeBServerFileOpenReadMode = "r";
 
 AsyncFileResponse::~AsyncFileResponse(){
   if(_content)
@@ -519,14 +404,32 @@ void AsyncFileResponse::_setContentType(const String& path){
   else _contentType = F("text/plain");
 }
 
-AsyncFileResponse::AsyncFileResponse(FS &fs, const String& path, const String& contentType, bool download, AwsTemplateProcessor callback): AsyncAbstractResponse(callback){
+// "attachment|inline; filename="<name>"" for the last path component: '"' and '\' are escaped,
+// control characters (CR/LF from an encoded URL) are dropped
+static String _contentDisposition(const String& path, bool download){
+  const char *filename = path.c_str() + (path.lastIndexOf('/') + 1);
+  String out;
+  out.reserve(24 + strlen(filename));
+  out += download ? F("attachment; filename=\"") : F("inline; filename=\"");
+  for(; *filename; filename++){
+    char c = *filename;
+    if((uint8_t)c < 0x20 || c == 0x7f)
+      continue;
+    if(c == '"' || c == '\\')
+      out += '\\';
+    out += c;
+  }
+  out += '"';
+  return out;
+}
+
+AsyncFileResponse::AsyncFileResponse(FS &fs, const String& path, const String& contentType, bool download): AsyncAbstractResponse(){
   _code = 200;
   _path = path;
 
   if(!download && !fs.exists(_path) && fs.exists(_path + F(".gz"))){
     _path = _path + F(".gz");
     addHeader(F("Content-Encoding"), F("gzip"));
-    _callback = nullptr; // Unable to process zipped templates
     _sendContentLength = true;
     _chunked = false;
   }
@@ -539,27 +442,15 @@ AsyncFileResponse::AsyncFileResponse(FS &fs, const String& path, const String& c
   else
     _contentType = contentType;
 
-  int filenameStart = path.lastIndexOf('/') + 1;
-  char buf[26+path.length()-filenameStart];
-  char* filename = (char*)path.c_str() + filenameStart;
-
-  if(download) {
-    // set filename and force download
-    snprintf_P(buf, sizeof(buf), PSTR("attachment; filename=\"%s\""), filename);
-  } else {
-    // set filename and force rendering
-    snprintf_P(buf, sizeof(buf), PSTR("inline; filename=\"%s\""), filename);
-  }
-  addHeader(F("Content-Disposition"), buf);
+  addHeader(F("Content-Disposition"), _contentDisposition(path, download));
 }
 
-AsyncFileResponse::AsyncFileResponse(File content, const String& path, const String& contentType, bool download, AwsTemplateProcessor callback): AsyncAbstractResponse(callback){
+AsyncFileResponse::AsyncFileResponse(File content, const String& path, const String& contentType, bool download): AsyncAbstractResponse(){
   _code = 200;
   _path = path;
 
   if(!download && String(content.name()).endsWith(F(".gz")) && !path.endsWith(F(".gz"))){
     addHeader(F("Content-Encoding"), F("gzip"));
-    _callback = nullptr; // Unable to process gzipped templates
     _sendContentLength = true;
     _chunked = false;
   }
@@ -572,16 +463,7 @@ AsyncFileResponse::AsyncFileResponse(File content, const String& path, const Str
   else
     _contentType = contentType;
 
-  int filenameStart = path.lastIndexOf('/') + 1;
-  char buf[26+path.length()-filenameStart];
-  char* filename = (char*)path.c_str() + filenameStart;
-
-  if(download) {
-    snprintf_P(buf, sizeof(buf), PSTR("attachment; filename=\"%s\""), filename);
-  } else {
-    snprintf_P(buf, sizeof(buf), PSTR("inline; filename=\"%s\""), filename);
-  }
-  addHeader(F("Content-Disposition"), buf);
+  addHeader(F("Content-Disposition"), _contentDisposition(path, download));
 }
 
 size_t AsyncFileResponse::_fillBuffer(uint8_t *data, size_t len){
@@ -592,7 +474,7 @@ size_t AsyncFileResponse::_fillBuffer(uint8_t *data, size_t len){
  * Stream Response
  * */
 
-AsyncStreamResponse::AsyncStreamResponse(Stream &stream, const String& contentType, size_t len, AwsTemplateProcessor callback): AsyncAbstractResponse(callback) {
+AsyncStreamResponse::AsyncStreamResponse(Stream &stream, const String& contentType, size_t len): AsyncAbstractResponse() {
   _code = 200;
   _content = &stream;
   _contentLength = len;
@@ -612,7 +494,7 @@ size_t AsyncStreamResponse::_fillBuffer(uint8_t *data, size_t len){
  * Callback Response
  * */
 
-AsyncCallbackResponse::AsyncCallbackResponse(const String& contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback): AsyncAbstractResponse(templateCallback) {
+AsyncCallbackResponse::AsyncCallbackResponse(const String& contentType, size_t len, AwsResponseFiller callback): AsyncAbstractResponse() {
   _code = 200;
   _content = callback;
   _contentLength = len;
@@ -634,7 +516,7 @@ size_t AsyncCallbackResponse::_fillBuffer(uint8_t *data, size_t len){
  * Chunked Response
  * */
 
-AsyncChunkedResponse::AsyncChunkedResponse(const String& contentType, AwsResponseFiller callback, AwsTemplateProcessor processorCallback): AsyncAbstractResponse(processorCallback) {
+AsyncChunkedResponse::AsyncChunkedResponse(const String& contentType, AwsResponseFiller callback): AsyncAbstractResponse() {
   _code = 200;
   _content = callback;
   _contentLength = 0;
@@ -656,7 +538,7 @@ size_t AsyncChunkedResponse::_fillBuffer(uint8_t *data, size_t len){
  * Progmem Response
  * */
 
-AsyncProgmemResponse::AsyncProgmemResponse(int code, const String& contentType, const uint8_t * content, size_t len, AwsTemplateProcessor callback): AsyncAbstractResponse(callback) {
+AsyncProgmemResponse::AsyncProgmemResponse(int code, const String& contentType, const uint8_t * content, size_t len): AsyncAbstractResponse() {
   _code = code;
   _content = content;
   _contentType = contentType;
@@ -674,41 +556,4 @@ size_t AsyncProgmemResponse::_fillBuffer(uint8_t *data, size_t len){
   memcpy_P(data, _content + _readLength, left);
   _readLength += left;
   return left;
-}
-
-
-/*
- * Response Stream (You can print/write/printf to it, up to the contentLen bytes)
- * */
-
-AsyncResponseStream::AsyncResponseStream(const String& contentType, size_t bufferSize){
-  _code = 200;
-  _contentLength = 0;
-  _contentType = contentType;
-  _content = new cbuf(bufferSize);
-}
-
-AsyncResponseStream::~AsyncResponseStream(){
-  delete _content;
-}
-
-size_t AsyncResponseStream::_fillBuffer(uint8_t *buf, size_t maxLen){
-  return _content->read((char*)buf, maxLen);
-}
-
-size_t AsyncResponseStream::write(const uint8_t *data, size_t len){
-  if(_started())
-    return 0;
-
-  if(len > _content->room()){
-    size_t needed = len - _content->room();
-    _content->resizeAdd(needed);
-  }
-  size_t written = _content->write((const char*)data, len);
-  _contentLength += written;
-  return written;
-}
-
-size_t AsyncResponseStream::write(uint8_t data){
-  return write(&data, 1);
 }

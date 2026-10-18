@@ -12,14 +12,13 @@
     "type": "git",
     "url": "https://github.com/sascha432/ESPAsyncWebServer.git"
   },
-  "version": "1.2.3",
+  "version": "2.0.0",
   "license": "LGPL-3.0",
   "frameworks": "arduino",
   "platforms": ["espressif8266", "espressif32"],
   "build": {
     "srcFilter": [
-      "+<*.cpp>",
-      "-<SPIFFSEditor.cpp>"
+      "+<*.cpp>"
     ]
   },
   "dependencies": [

@@ -3,41 +3,34 @@
 
 // Synchronisation is only available on ESP32, as the ESP8266 isn't using FreeRTOS by default
 
-#include <ESPAsyncWebServer.h>
+#include <Arduino.h>
 
 #ifdef ESP32
 
-// This is the ESP32 version of the Sync Lock, using the FreeRTOS Semaphore
+// This is the ESP32 version of the Sync Lock, a recursive FreeRTOS mutex: the same task can lock it
+// again (the owner check that compared pxCurrentTCB, an array, let every task pass)
 class AsyncWebLock
 {
 private:
   SemaphoreHandle_t _lock;
-  mutable void *_lockedBy;
 
 public:
-  AsyncWebLock() {
-    _lock = xSemaphoreCreateBinary();
-    _lockedBy = NULL;
-    xSemaphoreGive(_lock);
+  AsyncWebLock() : _lock(xSemaphoreCreateRecursiveMutex()) {
   }
 
   ~AsyncWebLock() {
     vSemaphoreDelete(_lock);
   }
 
+  AsyncWebLock(const AsyncWebLock &) = delete;
+  AsyncWebLock &operator=(const AsyncWebLock &) = delete;
+
   bool lock() const {
-    extern void *pxCurrentTCB;
-    if (_lockedBy != pxCurrentTCB) {
-      xSemaphoreTake(_lock, portMAX_DELAY);
-      _lockedBy = pxCurrentTCB;
-      return true;
-    }
-    return false;
+    return xSemaphoreTakeRecursive(_lock, portMAX_DELAY) == pdTRUE;
   }
 
   void unlock() const {
-    _lockedBy = NULL;
-    xSemaphoreGive(_lock);
+    xSemaphoreGiveRecursive(_lock);
   }
 };
 

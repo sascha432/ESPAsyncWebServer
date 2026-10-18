@@ -24,6 +24,7 @@
 #include "Arduino.h"
 
 #include <functional>
+#include <new>
 #include "FS.h"
 
 #include "StringArray.h"
@@ -38,13 +39,19 @@
 #error Platform not supported
 #endif
 
+#include "AsyncWebSynchronization.h"
+
 #ifdef ASYNCWEBSERVER_REGEX
 #define ASYNCWEBSERVER_REGEX_ATTRIBUTE
 #else
 #define ASYNCWEBSERVER_REGEX_ATTRIBUTE __attribute__((warning("ASYNCWEBSERVER_REGEX not defined")))
 #endif
 
-#define DEBUGF(...) //Serial.printf(__VA_ARGS__)
+// seconds without RX data before an idle connection is closed after the response has been sent
+// (the response sends "Connection: close" and leaves the close to the client)
+#ifndef ASYNCWEBSERVER_RESPONSE_END_RX_TIMEOUT
+#define ASYNCWEBSERVER_RESPONSE_END_RX_TIMEOUT 3
+#endif
 
 class AsyncWebServer;
 class AsyncWebServerRequest;
@@ -53,9 +60,7 @@ class AsyncWebHeader;
 class AsyncWebParameter;
 class AsyncWebRewrite;
 class AsyncWebHandler;
-class AsyncStaticWebHandler;
 class AsyncCallbackWebHandler;
-class AsyncResponseStream;
 
 extern "C" const char *AsyncWeBServerFileOpenReadMode;
 
@@ -69,6 +74,7 @@ typedef enum {
 
 #ifndef WEBSERVER_H
 typedef enum {
+  HTTP_UNKNOWN = 0b00000000, // a method the parser does not know, no handler matches it
   HTTP_GET     = 0b00000001,
   HTTP_POST    = 0b00000010,
   HTTP_DELETE  = 0b00000100,
@@ -128,7 +134,15 @@ class AsyncWebHeader {
     ~AsyncWebHeader(){}
     const String& name() const { return _name; }
     const String& value() const { return _value; }
-    String toString() const { return String(_name+": "+_value+"\r\n"); }
+    String toString() const {
+      String out;
+      out.reserve(_name.length() + _value.length() + 4);
+      out += _name;
+      out += F(": ");
+      out += _value;
+      out += F("\r\n");
+      return out;
+    }
 };
 
 /*
@@ -138,7 +152,6 @@ class AsyncWebHeader {
 typedef enum { RCT_NOT_USED = -1, RCT_DEFAULT = 0, RCT_HTTP, RCT_WS, RCT_EVENT, RCT_MAX } RequestedConnectionType;
 
 typedef std::function<size_t(uint8_t*, size_t, size_t)> AwsResponseFiller;
-typedef std::function<String(const String&)> AwsTemplateProcessor;
 
 class AsyncWebServerRequest {
   using File = fs::File;
@@ -162,10 +175,8 @@ class AsyncWebServerRequest {
     String _host;
     String _contentType;
     String _boundary;
-    String _authorization;
     RequestedConnectionType _reqconntype;
     void _removeNotInterestingHeaders();
-    bool _isDigest;
     bool _isMultipart;
     bool _isPlainPost;
     bool _expectingContinue;
@@ -187,6 +198,18 @@ class AsyncWebServerRequest {
     uint8_t *_itemBuffer;
     size_t _itemBufferIndex;
     bool _itemIsFile;
+    AsyncWebServerRequest *_nextRequest; // list of the live requests of _server
+    // The disconnect callback can run inside another callback of the connection (ESP32: close() is
+    // synchronous, ESP8266: close(true)). The request and its AsyncClient are deleted when the
+    // outermost callback returns, code that runs after a close() still has a valid object
+    uint8_t _cbDepth;
+    bool _disconnected; // the connection is gone, parse loops stop
+    bool _deleteLater; // handed over to a WebSocket client, deleted without the disconnect handler
+    AsyncClient *_deadClient;
+
+    void _enter() { _cbDepth++; }
+    void _leave();
+    void _clientDisconnected(AsyncClient *c);
 
     void _onPoll();
     void _onAck(size_t len, uint32_t time);
@@ -194,6 +217,10 @@ class AsyncWebServerRequest {
     void _onTimeout(uint32_t time);
     void _onDisconnect();
     void _onData(void *buf, size_t len);
+  public:
+    // deletes the request now or, inside one of its callbacks, when the callback returns
+    void _deleteSelf();
+  protected:
 
     void _addParam(AsyncWebParameter*);
     void _addPathParam(const char *param);
@@ -211,6 +238,27 @@ class AsyncWebServerRequest {
 
   public:
     File _tempFile;
+    void (*_tempObjectDeleter)(void *);
+
+    // stores a new()ed object, the request deletes it with its type when it is destroyed
+    template<typename T>
+    void setTempObject(T *object) {
+      clearTempObject();
+      _tempObject = object;
+      _tempObjectDeleter = [](void *ptr) { delete static_cast<T *>(ptr); };
+    }
+    void clearTempObject() {
+      if (_tempObject) {
+        if (_tempObjectDeleter) {
+          _tempObjectDeleter(_tempObject);
+        } else {
+          free(_tempObject);
+        }
+      }
+      _tempObject = nullptr;
+      _tempObjectDeleter = nullptr;
+    }
+    // released by the request: with the deleter of setTempObject(), otherwise with free() (malloc/strdup)
     void *_tempObject;
 
     AsyncWebServerRequest(AsyncWebServer*, AsyncClient*);
@@ -226,17 +274,10 @@ class AsyncWebServerRequest {
     size_t contentLength() const { return _contentLength; }
     bool multipart() const { return _isMultipart; }
     const __FlashStringHelper *methodToString() const;
-    const char * requestedConnTypeToString() const;
+    const __FlashStringHelper *requestedConnTypeToString() const;
     RequestedConnectionType requestedConnType() const { return _reqconntype; }
     bool isExpectedRequestedConnType(RequestedConnectionType erct1, RequestedConnectionType erct2 = RCT_NOT_USED, RequestedConnectionType erct3 = RCT_NOT_USED);
     void onDisconnect (ArDisconnectHandler fn);
-
-    //hash is the string representation of:
-    // base64(user:pass) for basic or
-    // user:realm:md5(user:realm:pass) for digest
-    bool authenticate(const char * hash);
-    bool authenticate(const char * username, const char * password, const char * realm = NULL, bool passwordIsHash = false);
-    void requestAuthentication(const char * realm = NULL, bool isDigest = true);
 
     void setHandler(AsyncWebHandler *handler){ _handler = handler; }
     void addInterestingHeader(const String& name);
@@ -245,23 +286,24 @@ class AsyncWebServerRequest {
 
     void send(AsyncWebServerResponse *response);
     void send(int code, const String& contentType=String(), const String& content=String());
-    void send(FS &fs, const String& path, const String& contentType=String(), bool download=false, AwsTemplateProcessor callback=nullptr);
-    void send(File content, const String& path, const String& contentType=String(), bool download=false, AwsTemplateProcessor callback=nullptr);
-    void send(Stream &stream, const String& contentType, size_t len, AwsTemplateProcessor callback=nullptr);
-    void send(const String& contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback=nullptr);
-    void sendChunked(const String& contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback=nullptr);
-    void send_P(int code, const String& contentType, const uint8_t * content, size_t len, AwsTemplateProcessor callback=nullptr);
-    void send_P(int code, const String& contentType, PGM_P content, AwsTemplateProcessor callback=nullptr);
+    void send(int code, const String& contentType, String&& content); // no copy of the content
+    void send(FS &fs, const String& path, const String& contentType=String(), bool download=false);
+    void send(File content, const String& path, const String& contentType=String(), bool download=false);
+    void send(Stream &stream, const String& contentType, size_t len);
+    void send(const String& contentType, size_t len, AwsResponseFiller callback);
+    void sendChunked(const String& contentType, AwsResponseFiller callback);
+    void send_P(int code, const String& contentType, const uint8_t * content, size_t len);
+    void send_P(int code, const String& contentType, PGM_P content);
 
     AsyncWebServerResponse *beginResponse(int code, const String& contentType=String(), const String& content=String());
-    AsyncWebServerResponse *beginResponse(FS &fs, const String& path, const String& contentType=String(), bool download=false, AwsTemplateProcessor callback=nullptr);
-    AsyncWebServerResponse *beginResponse(File content, const String& path, const String& contentType=String(), bool download=false, AwsTemplateProcessor callback=nullptr);
-    AsyncWebServerResponse *beginResponse(Stream &stream, const String& contentType, size_t len, AwsTemplateProcessor callback=nullptr);
-    AsyncWebServerResponse *beginResponse(const String& contentType, size_t len, AwsResponseFiller callback, AwsTemplateProcessor templateCallback=nullptr);
-    AsyncWebServerResponse *beginChunkedResponse(const String& contentType, AwsResponseFiller callback, AwsTemplateProcessor templateCallback=nullptr);
-    AsyncResponseStream *beginResponseStream(const String& contentType, size_t bufferSize=1460);
-    AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, const uint8_t * content, size_t len, AwsTemplateProcessor callback=nullptr);
-    AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, PGM_P content, AwsTemplateProcessor callback=nullptr);
+    AsyncWebServerResponse *beginResponse(int code, const String& contentType, String&& content); // no copy of the content
+    AsyncWebServerResponse *beginResponse(FS &fs, const String& path, const String& contentType=String(), bool download=false);
+    AsyncWebServerResponse *beginResponse(File content, const String& path, const String& contentType=String(), bool download=false);
+    AsyncWebServerResponse *beginResponse(Stream &stream, const String& contentType, size_t len);
+    AsyncWebServerResponse *beginResponse(const String& contentType, size_t len, AwsResponseFiller callback);
+    AsyncWebServerResponse *beginChunkedResponse(const String& contentType, AwsResponseFiller callback);
+    AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, const uint8_t * content, size_t len);
+    AsyncWebServerResponse *beginResponse_P(int code, const String& contentType, PGM_P content);
 
     size_t headers() const;                     // get header count
     bool hasHeader(const String& name) const;   // check if header exists
@@ -350,12 +392,9 @@ class AsyncWebRewrite {
 class AsyncWebHandler {
   protected:
     ArRequestFilterFunction _filter;
-    String _username;
-    String _password;
   public:
-    AsyncWebHandler():_username(""), _password(""){}
+    AsyncWebHandler(){}
     AsyncWebHandler& setFilter(ArRequestFilterFunction fn) { _filter = fn; return *this; }
-    AsyncWebHandler& setAuthentication(const char *username, const char *password){  _username = String(username);_password = String(password); return *this; };
     bool filter(AsyncWebServerRequest *request){ return _filter == NULL || _filter(request); }
     virtual ~AsyncWebHandler(){}
     virtual bool canHandle(AsyncWebServerRequest *request __attribute__((unused))){
@@ -441,6 +480,10 @@ class AsyncWebServer {
     LinkedList<AsyncWebRewrite*> _rewrites;
     LinkedList<AsyncWebHandler*> _handlers;
     AsyncCallbackWebHandler* _catchAllHandler;
+    AsyncWebServerRequest *_requests; // live requests, they point to the server and its handlers
+    AsyncWebLock _requestsLock;
+
+    void _closeRequests();
 
   public:
     AsyncWebServer(uint16_t port);
@@ -466,16 +509,18 @@ class AsyncWebServer {
     AsyncCallbackWebHandler& on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload);
     AsyncCallbackWebHandler& on(const char* uri, WebRequestMethodComposite method, ArRequestHandlerFunction onRequest, ArUploadHandlerFunction onUpload, ArBodyHandlerFunction onBody);
 
-    AsyncStaticWebHandler& serveStatic(const char* uri, fs::FS& fs, const char* path, const char* cache_control = NULL);
-
     void onNotFound(ArRequestHandlerFunction fn);  //called when handler is not assigned
     void onFileUpload(ArUploadHandlerFunction fn); //handle file uploads
     void onRequestBody(ArBodyHandlerFunction fn); //handle posts with plain body content (JSON often transmitted this way as a request)
 
     void reset(); //remove all writers and handlers, with onNotFound/onFileUpload/onRequestBody
 
-    void _handleDisconnect(AsyncWebServerRequest *request);
+    void _addRequest(AsyncWebServerRequest *request);
+    void _removeRequest(AsyncWebServerRequest *request);
     void _attachHandler(AsyncWebServerRequest *request);
+    // closes a connection without its owner: the callbacks are removed first, a late event (ESP32:
+    // the queued error of an aborted connection) must not call into the owner after it was deleted
+    static void _closeDetached(AsyncClient *client);
     void _rewriteRequest(AsyncWebServerRequest *request);
 };
 
@@ -507,6 +552,5 @@ public:
 #include "WebResponseImpl.h"
 #include "WebHandlerImpl.h"
 #include "AsyncWebSocket.h"
-#include "AsyncEventSource.h"
 
 #endif /* _AsyncWebServer_H_ */

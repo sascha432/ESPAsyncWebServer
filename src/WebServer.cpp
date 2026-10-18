@@ -34,6 +34,7 @@ AsyncWebServer::AsyncWebServer(uint16_t port)
   : _server(port)
   , _rewrites(LinkedList<AsyncWebRewrite*>([](AsyncWebRewrite* r){ delete r; }))
   , _handlers(LinkedList<AsyncWebHandler*>([](AsyncWebHandler* h){ delete h; }))
+  , _requests(nullptr)
 {
   _catchAllHandler = new AsyncCallbackWebHandler();
   if(_catchAllHandler == NULL)
@@ -42,7 +43,7 @@ AsyncWebServer::AsyncWebServer(uint16_t port)
     if(c == NULL)
       return;
     c->setRxTimeout(3);
-    AsyncWebServerRequest *r = new AsyncWebServerRequest((AsyncWebServer*)s, c);
+    AsyncWebServerRequest *r = new (std::nothrow) AsyncWebServerRequest((AsyncWebServer*)s, c);
     if(r == NULL){
       c->close(true);
       c->free();
@@ -52,9 +53,62 @@ AsyncWebServer::AsyncWebServer(uint16_t port)
 }
 
 AsyncWebServer::~AsyncWebServer(){
-  reset();  
   end();
+  // the requests point to this server and to the handlers, they are closed before reset() deletes them
+  _closeRequests();
+  reset();
   if(_catchAllHandler) delete _catchAllHandler;
+}
+
+void AsyncWebServer::_addRequest(AsyncWebServerRequest *request){
+  AsyncWebLockGuard l(_requestsLock);
+  request->_nextRequest = _requests;
+  _requests = request;
+}
+
+void AsyncWebServer::_removeRequest(AsyncWebServerRequest *request){
+  AsyncWebLockGuard l(_requestsLock);
+  for(auto ptr = &_requests; *ptr; ptr = &(*ptr)->_nextRequest){
+    if(*ptr == request){
+      *ptr = request->_nextRequest;
+      break;
+    }
+  }
+  request->_nextRequest = nullptr;
+}
+
+void AsyncWebServer::_closeRequests(){
+  AsyncWebServerRequest *list;
+  {
+    AsyncWebLockGuard l(_requestsLock);
+    list = _requests;
+    _requests = nullptr;
+    // detached: the requests do not remove themselves from the list any more
+    for(auto request = list; request; request = request->_nextRequest){
+      request->_server = nullptr;
+      request->_handler = nullptr;
+    }
+  }
+  while(list){
+    auto request = list;
+    list = request->_nextRequest;
+    request->_nextRequest = nullptr;
+    if(request->_client){
+      _closeDetached(request->_client);
+      request->_client = nullptr;
+    }
+    request->_onDisconnect(); // calls the disconnect handler and deletes the request
+  }
+}
+
+void AsyncWebServer::_closeDetached(AsyncClient *client){
+  client->onError(nullptr, nullptr);
+  client->onAck(nullptr, nullptr);
+  client->onTimeout(nullptr, nullptr);
+  client->onData(nullptr, nullptr);
+  client->onPoll(nullptr, nullptr);
+  client->onDisconnect([](void *, AsyncClient *c){ delete c; }, nullptr);
+  client->close(true);
 }
 
 AsyncWebRewrite& AsyncWebServer::addRewrite(AsyncWebRewrite* rewrite){
@@ -97,10 +151,6 @@ void AsyncWebServer::beginSecure(const char *cert, const char *key, const char *
   _server.beginSecure(cert, key, password);
 }
 #endif
-
-void AsyncWebServer::_handleDisconnect(AsyncWebServerRequest *request){
-  delete request;
-}
 
 void AsyncWebServer::_rewriteRequest(AsyncWebServerRequest *request){
   for(const auto& r: _rewrites){
@@ -158,12 +208,6 @@ AsyncCallbackWebHandler& AsyncWebServer::on(const char* uri, ArRequestHandlerFun
   AsyncCallbackWebHandler* handler = new AsyncCallbackWebHandler();
   handler->setUri(uri);
   handler->onRequest(onRequest);
-  addHandler(handler);
-  return *handler;
-}
-
-AsyncStaticWebHandler& AsyncWebServer::serveStatic(const char* uri, fs::FS& fs, const char* path, const char* cache_control){
-  AsyncStaticWebHandler* handler = new AsyncStaticWebHandler(uri, fs, path, cache_control);
   addHandler(handler);
   return *handler;
 }
