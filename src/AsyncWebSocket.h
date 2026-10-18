@@ -93,11 +93,15 @@ class AsyncWebSocketMessageBuffer {
     size_t _len;
     bool _lock;
     uint32_t _count;
+    String _string; // storage of a buffer created from String&&, _data points into it
+
+    bool _ownsData() const { return _data && _data != reinterpret_cast<const uint8_t *>(_string.c_str()); }
 
   public:
     AsyncWebSocketMessageBuffer();
     AsyncWebSocketMessageBuffer(size_t size);
     AsyncWebSocketMessageBuffer(const uint8_t *data, size_t size); // supports PROGMEM
+    AsyncWebSocketMessageBuffer(String &&str); // keeps the String as storage, no copy
     AsyncWebSocketMessageBuffer(const AsyncWebSocketMessageBuffer &);
     AsyncWebSocketMessageBuffer(AsyncWebSocketMessageBuffer &&);
     ~AsyncWebSocketMessageBuffer();
@@ -427,6 +431,7 @@ class AsyncWebSocket: public AsyncWebHandler {
     //  messagebuffer functions/objects.
     AsyncWebSocketMessageBuffer *makeBuffer(size_t size = 0);
     AsyncWebSocketMessageBuffer *makeBuffer(const uint8_t *data, size_t size); // supports PROGMEM
+    AsyncWebSocketMessageBuffer *makeBuffer(String &&str); // no copy
     LinkedList<AsyncWebSocketMessageBuffer *> _buffers;
     void _cleanBuffers();
 

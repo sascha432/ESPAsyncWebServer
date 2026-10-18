@@ -143,6 +143,17 @@ AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(const uint8_t * data, s
 }
 
 
+AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(String &&str)
+  :_data(nullptr)
+  ,_len(str.length())
+  ,_lock(false)
+  ,_count(0)
+  ,_string(std::move(str))
+{
+  // the String is NUL terminated; an empty String may not have a buffer
+  _data = reinterpret_cast<uint8_t *>(const_cast<char *>(_string.c_str()));
+}
+
 AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(size_t size)
   :_data(nullptr)
   ,_len(size)
@@ -192,15 +203,22 @@ AsyncWebSocketMessageBuffer::AsyncWebSocketMessageBuffer(AsyncWebSocketMessageBu
   _count = 0;
 
   if (copy._data) {
-    _data = copy._data;
+    if (copy._ownsData()) {
+      _data = copy._data;
+    } else {
+      // the String's buffer can be inline (SSO), get the pointer after the move
+      _string = std::move(copy._string);
+      _data = reinterpret_cast<uint8_t *>(const_cast<char *>(_string.c_str()));
+    }
     copy._data = nullptr;
+    copy._len = 0;
   }
 
 }
 
 AsyncWebSocketMessageBuffer::~AsyncWebSocketMessageBuffer()
 {
-    if (_data) {
+    if (_ownsData()) {
       delete[] _data;
     }
 }
@@ -209,9 +227,10 @@ bool AsyncWebSocketMessageBuffer::reserve(size_t size)
 {
   _len = size;
 
-  if (_data) {
+  if (_ownsData()) {
     delete[] _data;
   }
+  _string = String();
   _data = new uint8_t[_len + 1];
   if (_data) {
     _data[_len] = 0;
@@ -997,6 +1016,18 @@ AsyncWebSocketMessageBuffer * AsyncWebSocket::makeBuffer(size_t size)
 AsyncWebSocketMessageBuffer * AsyncWebSocket::makeBuffer(const uint8_t *data, size_t size)
 {
   AsyncWebSocketMessageBuffer * buffer = new AsyncWebSocketMessageBuffer(data, size);
+
+  if (buffer) {
+    AsyncWebLockGuard l(_lock);
+    _buffers.add(buffer);
+  }
+
+  return buffer;
+}
+
+AsyncWebSocketMessageBuffer * AsyncWebSocket::makeBuffer(String &&str)
+{
+  AsyncWebSocketMessageBuffer * buffer = new AsyncWebSocketMessageBuffer(std::move(str));
 
   if (buffer) {
     AsyncWebLockGuard l(_lock);
