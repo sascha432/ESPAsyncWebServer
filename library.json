@@ -29,9 +29,9 @@
       "platforms": "espressif8266"
     },
     {
-      "owner": "me-no-dev",      
+      "owner": "esp32async",
       "name": "AsyncTCP",
-      "version": "^1.1.1",
+      "version": "^3.5.0",
       "platforms": "espressif32"
     },
     {
