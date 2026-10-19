@@ -313,7 +313,7 @@ class AsyncWebSocketClient {
     void _onError(int8_t) {}
     void _onPoll();
     void _onTimeout(uint32_t time) {
-      _client->close(true);
+      asyncClientCloseNow(_client);
     }
     void _onDisconnect();
     void _onData(void *pbuf, size_t plen);

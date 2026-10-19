@@ -45,7 +45,7 @@ AsyncWebServer::AsyncWebServer(uint16_t port)
     c->setRxTimeout(3);
     AsyncWebServerRequest *r = new (std::nothrow) AsyncWebServerRequest((AsyncWebServer*)s, c);
     if(r == NULL){
-      c->close(true);
+      asyncClientCloseNow(c);
       c->free();
       delete c;
     }
@@ -108,7 +108,7 @@ void AsyncWebServer::_closeDetached(AsyncClient *client){
   client->onData(nullptr, nullptr);
   client->onPoll(nullptr, nullptr);
   client->onDisconnect([](void *, AsyncClient *c){ delete c; }, nullptr);
-  client->close(true);
+  asyncClientCloseNow(client);
 }
 
 AsyncWebRewrite& AsyncWebServer::addRewrite(AsyncWebRewrite* rewrite){

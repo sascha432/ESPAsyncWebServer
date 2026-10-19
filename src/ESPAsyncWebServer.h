@@ -39,6 +39,18 @@
 #error Platform not supported
 #endif
 
+// closes the connection at once. ESP32 (AsyncTCP 3.x): close() is synchronous, close(bool) is deprecated and
+// ignores its argument. ESP8266 (ESPAsyncTCP): only close(true) closes at once, close() defers it to the next
+// poll of the connection
+inline void asyncClientCloseNow(AsyncClient *client)
+{
+#ifdef ESP32
+  client->close();
+#else
+  client->close(true);
+#endif
+}
+
 #include "AsyncWebSynchronization.h"
 
 #ifdef ASYNCWEBSERVER_REGEX

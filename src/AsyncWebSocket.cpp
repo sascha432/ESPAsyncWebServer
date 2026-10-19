@@ -550,7 +550,7 @@ void AsyncWebSocketClient::_protocolError(uint16_t code){
   if(_status == WS_CONNECTED){
     close(code);
   } else {
-    _client->close(true);
+    asyncClientCloseNow(_client);
   }
 }
 
@@ -571,7 +571,7 @@ void AsyncWebSocketClient::_onAck(size_t len, uint32_t time){
         if(_status == WS_DISCONNECTING && head->opcode() == WS_DISCONNECT){
           _controlQueue.remove(head);
           _status = WS_DISCONNECTED;
-          _client->close(true);
+          asyncClientCloseNow(_client);
           return;
         }
         _controlQueue.remove(head);
@@ -780,7 +780,7 @@ void AsyncWebSocketClient::_onData(void *pbuf, size_t plen){
         }
         if(_status == WS_DISCONNECTING){
           _status = WS_DISCONNECTED;
-          _client->close(true);
+          asyncClientCloseNow(_client);
         } else if(!_disconnected){
           _status = WS_DISCONNECTING;
           _client->ackLater();
@@ -1242,7 +1242,7 @@ AsyncWebSocketResponse::AsyncWebSocketResponse(const String& key, AsyncWebSocket
 
 void AsyncWebSocketResponse::_respond(AsyncWebServerRequest *request){
   if(_state == RESPONSE_FAILED){
-    request->client()->close(true);
+    asyncClientCloseNow(request->client());
     return;
   }
   String out = _assembleHead(request->version());
