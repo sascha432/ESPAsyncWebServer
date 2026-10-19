@@ -756,7 +756,8 @@ void AsyncWebSocketClient::_onData(void *pbuf, size_t plen){
         }
         memcpy(_ctrlData + _pinfo.index, data, datalen);
       } else {
-        _server->_handleEvent(this, WS_EVT_DATA, (void *)&_pinfo, (uint8_t*)data, datalen);
+        if(datalen) // the header can complete without payload in the same segment
+          _server->_handleEvent(this, WS_EVT_DATA, (void *)&_pinfo, (uint8_t*)data, datalen);
       }
       _pinfo.index += datalen;
     } else {

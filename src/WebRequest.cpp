@@ -65,8 +65,8 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer* s, AsyncClient* c)
   , _disconnected(false)
   , _deleteLater(false)
   , _deadClient(nullptr)
-  , _tempObject(NULL)
   , _tempObjectDeleter(nullptr)
+  , _tempObject(NULL)
 {
   if (c) {
     // _enter()/_leave() around every callback: see _cbDepth
@@ -181,12 +181,15 @@ void AsyncWebServerRequest::_onData(void *buf, size_t len){
         for(i=0; i<len; i++){
           _parsedLength++;
           _parsePlainPostChar(((uint8_t*)buf)[i]);
+          if(_parseState != PARSE_REQ_BODY){
+            return; // out of memory, answered with 413
+          }
         }
       } else {
         _parsedLength += len;
       }
     }
-    if(_parsedLength == _contentLength){
+    if(_parseState == PARSE_REQ_BODY && _parsedLength == _contentLength){
       _parseState = PARSE_REQ_END;
       if(_handler) _handler->handleRequest(this);
       else send(501);
@@ -385,17 +388,44 @@ bool AsyncWebServerRequest::_parseReqHeader(){
 }
 
 void AsyncWebServerRequest::_parsePlainPostChar(uint8_t data){
-  if(data && (char)data != '&')
-    _temp += (char)data;
-  if(!data || (char)data == '&' || _parsedLength == _contentLength){
-    String name = F("body");
-    String value = _temp;
-    if(!StrView(_temp).startsWith('{') && !StrView(_temp).startsWith('[') && _temp.indexOf('=') > 0){
-      name = _temp.substring(0, _temp.indexOf('='));
-      value = _temp.substring(_temp.indexOf('=') + 1);
+  if(data && (char)data != '&'){
+    if(!_temp.concat((char)data)){
+      _bodyAllocFailed();
+      return;
     }
-    _addParam(new AsyncWebParameter(urlDecode(name), urlDecode(value), true));
+  }
+  if(!data || (char)data == '&' || _parsedLength == _contentLength){
+    // name and value are decoded straight from _temp: a large value existed up to 4 times before
+    // (_temp, a copy, substring(), urlDecode()) and a failed allocation crashed in String::move()
+    String name;
+    String value;
+    bool ok;
+    int pos = _temp.indexOf('=');
+    if(!StrView(_temp).startsWith('{') && !StrView(_temp).startsWith('[') && pos > 0){
+      ok = _urlDecode(_temp.c_str(), pos, name) && _urlDecode(_temp.c_str() + pos + 1, _temp.length() - pos - 1, value);
+    } else {
+      name = F("body");
+      ok = _urlDecode(_temp.c_str(), _temp.length(), value);
+    }
     _temp = String();
+    if(!ok){
+      _bodyAllocFailed();
+      return;
+    }
+    auto param = new (std::nothrow) AsyncWebParameter(std::move(name), std::move(value), true);
+    if(!param){
+      _bodyAllocFailed();
+      return;
+    }
+    _addParam(param);
+  }
+}
+
+void AsyncWebServerRequest::_bodyAllocFailed(){
+  _temp = String();
+  _parseState = PARSE_REQ_FAIL; // _onData() ignores the rest of the body, no handler is called
+  if(_client){ // the firmware's AsyncWebServerRequestParser has no connection
+    send(413);
   }
 }
 
@@ -905,18 +935,26 @@ const String& AsyncWebServerRequest::headerName(size_t i) const {
 }
 
 String AsyncWebServerRequest::urlDecode(const String& text) const {
+  String decoded;
+  _urlDecode(text.c_str(), text.length(), decoded);
+  return decoded;
+}
+
+bool AsyncWebServerRequest::_urlDecode(const char *text, size_t len, String &out){
   char temp[] = "0x00";
-  unsigned int len = text.length();
-  unsigned int i = 0;
-  String decoded = String();
-  decoded.reserve(len); // Allocate the string internal buffer - never longer from source text
+  size_t i = 0;
+  out = String();
+  // the decoded text is never longer than the source text, nothing is reallocated below
+  if (len && !out.reserve(len)){
+    return false;
+  }
   while (i < len){
     char decodedChar;
-    char encodedChar = text.charAt(i++);
+    char encodedChar = text[i++];
     // an invalid escape ("%zz", "%" at the end) is kept as it is
-    if ((encodedChar == '%') && (i + 1 < len) && isxdigit(text.charAt(i)) && isxdigit(text.charAt(i + 1))){
-      temp[2] = text.charAt(i++);
-      temp[3] = text.charAt(i++);
+    if ((encodedChar == '%') && (i + 1 < len) && isxdigit(text[i]) && isxdigit(text[i + 1])){
+      temp[2] = text[i++];
+      temp[3] = text[i++];
       decodedChar = strtol(temp, NULL, 16);
       if (!decodedChar) {
         continue; // %00 would truncate the string in c_str()
@@ -926,9 +964,11 @@ String AsyncWebServerRequest::urlDecode(const String& text) const {
     } else {
       decodedChar = encodedChar;  // normal ascii char
     }
-    decoded.concat(decodedChar);
+    if (!out.concat(decodedChar)){
+      return false;
+    }
   }
-  return decoded;
+  return true;
 }
 
 

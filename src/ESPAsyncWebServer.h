@@ -105,7 +105,8 @@ class AsyncWebParameter {
     bool _isFile;
 
   public:
-    AsyncWebParameter(const String& name, const String& value, bool form=false, bool file=false, size_t size=0): _name(name), _value(value), _size(size), _isForm(form), _isFile(file){}
+    // by value: a temporary (a decoded form value) is moved, not copied
+    AsyncWebParameter(String name, String value, bool form=false, bool file=false, size_t size=0): _name(std::move(name)), _value(std::move(value)), _size(size), _isForm(form), _isFile(file){}
     const String& name() const { return _name; }
     const String& value() const { return _value; }
     size_t size() const { return _size; }
@@ -229,6 +230,10 @@ class AsyncWebServerRequest {
     bool _parseReqHeader();
     void _parseLine();
     void _parsePlainPostChar(uint8_t data);
+    // decodes len characters of text into out, false if the memory for it could not be allocated
+    static bool _urlDecode(const char *text, size_t len, String &out);
+    // a String of the body could not be allocated: answered with 413, the rest of the body is ignored
+    void _bodyAllocFailed();
     void _parseMultipartPostByte(uint8_t data, bool last);
     void _addGetParams(const String& params);
 
