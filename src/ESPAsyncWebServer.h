@@ -193,6 +193,7 @@ class AsyncWebServerRequest {
     bool _isMultipart;
     bool _isPlainPost;
     bool _expectingContinue;
+    bool _badHeader; // a header that cannot be parsed (Content-Length): answered with 400, no handler
     size_t _contentLength;
     size_t _parsedLength;
 

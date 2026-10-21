@@ -44,6 +44,7 @@ AsyncWebServerRequest::AsyncWebServerRequest(AsyncWebServer* s, AsyncClient* c)
   , _isMultipart(false)
   , _isPlainPost(false)
   , _expectingContinue(false)
+  , _badHeader(false)
   , _contentLength(0)
   , _parsedLength(0)
   , _headers(LinkedList<AsyncWebHeader *>([](AsyncWebHeader *h){ delete h; }))
@@ -366,7 +367,15 @@ bool AsyncWebServerRequest::_parseReqHeader(){
         _isMultipart = true;
       }
     } else if(name.equalsIgnoreCase(F("Content-Length"))){
-      _contentLength = atoi(value.c_str());
+      // digits only (RFC 7230 3.3.2): atoi() turned a negative or malformed value into a size_t that no
+      // body ever reached, the connection stayed open until the RX timeout
+      char *end;
+      unsigned long length = strtoul(value.c_str(), &end, 10);
+      if(!isdigit((uint8_t)value[0]) || *end || length > SIZE_MAX / 2){
+        _badHeader = true;
+      } else {
+        _contentLength = length;
+      }
     } else if(name.equalsIgnoreCase(F("Expect")) && F("100-continue") == value){
       _expectingContinue = true;
     } else {
@@ -632,14 +641,15 @@ void AsyncWebServerRequest::_parseLine(){
       if(badBoundary){
         _isMultipart = false;
       }
+      const bool badRequest = badBoundary || _badHeader;
       // an unknown method gets no handler (HTTP_ANY would match every handler), it is answered with 501
-      const bool dispatch = _method != HTTP_UNKNOWN && !badBoundary;
+      const bool dispatch = _method != HTTP_UNKNOWN && !badRequest;
       if(dispatch){
         _server->_rewriteRequest(this);
         _server->_attachHandler(this);
       }
       _removeNotInterestingHeaders();
-      if(badBoundary){
+      if(badRequest){
         send(400); // the body is read without a handler, the second response at its end is ignored
       }
       if(_expectingContinue && dispatch){
